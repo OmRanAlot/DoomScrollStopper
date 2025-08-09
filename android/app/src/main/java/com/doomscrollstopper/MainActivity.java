@@ -1,0 +1,44 @@
+package com.doomscrollstopper;
+
+import com.facebook.react.ReactActivity;
+import com.facebook.react.ReactActivityDelegate;
+import com.facebook.react.ReactRootView;
+import android.content.Intent;
+import android.net.VpnService;
+import android.os.Bundle;
+
+public class MainActivity extends ReactActivity {
+    private static final int VPN_REQUEST_CODE = 1;
+
+    /**
+     * Returns the name of the main component registered from JavaScript.
+     * This is used to schedule rendering of the component.
+     */
+    @Override
+    protected String getMainComponentName() {
+        return "DoomScrollStopper"; // This should match the "name" in app.json
+    }
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+    }
+
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        
+        if (requestCode == VPN_REQUEST_CODE) {
+            if (resultCode == RESULT_OK) {
+                // Permission granted, start the VPN service
+                Intent intent = new Intent(this, MyVpnService.class);
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                    startForegroundService(intent);
+                } else {
+                    startService(intent);
+                }
+            }
+            // If result is not OK, the user denied the permission
+        }
+    }
+}

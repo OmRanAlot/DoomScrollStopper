@@ -1,29 +1,37 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- */
+// App.tsx
+import React from 'react';
+import { SafeAreaView, StyleSheet, StatusBar, useColorScheme, Button } from 'react-native';
+import VPNSwitch from './components/VPNSwitch';
+import { Linking } from 'react-native';
 
-import { StatusBar, StyleSheet, useColorScheme, View, Text } from 'react-native';
 
-function App() {
+const App = () => {
   const isDarkMode = useColorScheme() === 'dark';
 
+
+  const openUsageAccessSettings = () => {
+    Linking.openSettings(); // basic fallback
+
+    // Or use native module to launch:
+    // android.settings.USAGE_ACCESS_SETTINGS
+  };
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={[styles.container, isDarkMode && styles.darkContainer]}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-      <Text>Hello World</Text>
-    </View>
+      <VPNSwitch />
+      {/* <Button title="Enable App Usage Access" onPress={openUsageAccessSettings} /> */}
+    </SafeAreaView>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#f5f5f5',
     justifyContent: 'center',
-    alignItems: 'center',
+  },
+  darkContainer: {
+    backgroundColor: '#121212',
   },
 });
 

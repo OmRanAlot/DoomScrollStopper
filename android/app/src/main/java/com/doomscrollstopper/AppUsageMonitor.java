@@ -37,7 +37,12 @@ public class AppUsageMonitor {
     private WindowManager windowManager;
     private View overlayView;
     private String lastDetectedApp = "";
-    
+    private boolean isOverlayActive = false;
+    private String lastAppPackage = "";
+    private String currentForegroundApp = "";
+    private Set<String> allowedThisSession = new HashSet<>();
+
+
     public interface AppDetectionListener {
         void onAppDetected(String packageName, String appName);
         void onBlockedAppOpened(String packageName, String appName);
@@ -68,28 +73,41 @@ public class AppUsageMonitor {
     }
     
     private void monitorApps() {
-        handler.postDelayed(() -> {
-            if (!isMonitoring) return;
-            
-            String currentApp = getCurrentForegroundApp();
-            
-            if (currentApp != null && !currentApp.equals(lastDetectedApp) && 
-                !currentApp.equals(context.getPackageName())) {
-                
-                lastDetectedApp = currentApp;
-                String appName = getAppName(currentApp);
-                
-                if (listener != null) {
-                    listener.onAppDetected(currentApp, appName);
-                }
-                
-                if (blockedApps.contains(currentApp)) {
-                    handleBlockedApp(currentApp, appName);
-                }
+        Runnable runnable = new Runnable() {
+            @Override
+            public void run() {
+                String foregroundApp = getCurrentForegroundApp();
+    
+                if (foregroundApp != null && !foregroundApp.equals(context.getPackageName())) {
+                    String appName = getAppName(foregroundApp);
+    
+                    // Always trigger block if app is in blocked list
+                    if (blockedApps.contains(foregroundApp) && !isOverlayActive 
+                        && !allowedThisSession.contains(foregroundApp)) {
+                        Log.d("AppMonitor", "Blocked app detected: " + appName);
+                        handleBlockedApp(foregroundApp, appName);
+                    }
+
+                    // If user switches away from an allowed app, remove it from allowed session
+                    if (!foregroundApp.equals(currentForegroundApp)) {
+                        if (currentForegroundApp != null && !currentForegroundApp.isEmpty()) {
+                            allowedThisSession.remove(currentForegroundApp);
+                        }
+                        currentForegroundApp = foregroundApp;
+                    }   
+
+                }   
+                // // Repeat every second
+                // handler.postDelayed(this, 1000);
+
+                // Repeat every second
+                if (isMonitoring) {
+                    handler.postDelayed(this, 1000);
+                }   
             }
-            
-            monitorApps(); // Continue monitoring
-        }, 1000); // Check every second
+        };
+    
+        handler.post(runnable);
     }
     
     private String getCurrentForegroundApp() {
@@ -114,22 +132,23 @@ public class AppUsageMonitor {
     }
     
     private void handleBlockedApp(String packageName, String appName) {
-        if (listener != null) {
-            listener.onBlockedAppOpened(packageName, appName);
+        if (isOverlayActive && packageName.equals(lastAppPackage)) {
+            Log.d(TAG, "Overlay already active for: " + appName);
+            return;
         }
-        
-        // Check if we should show delay screen
-        Long lastDelayTime = appDelayTimes.get(packageName);
-        long currentTime = System.currentTimeMillis();
-        
-        // Show delay if not shown in last 5 minutes
-        if (lastDelayTime == null || currentTime - lastDelayTime > 5 * 60 * 1000) {
-            appDelayTimes.put(packageName, currentTime);
-            showDelayOverlay(packageName, appName);
-        }
+    
+        isOverlayActive = true;
+        showDelayOverlay(packageName, appName);
     }
     
     private void showDelayOverlay(String packageName, String appName) {
+        if (isOverlayActive && packageName.equals(lastAppPackage)) {
+            // Already showing for this app — don't restart
+            return;
+        }
+        lastAppPackage = packageName;
+        isOverlayActive = true;
+
         handler.post(() -> {
             if (overlayView != null) {
                 windowManager.removeView(overlayView);
@@ -170,6 +189,10 @@ public class AppUsageMonitor {
             
             backButton.setOnClickListener(v -> {
                 removeOverlay();
+
+                // Don't add to allowed session when going back to home
+                allowedThisSession.remove(packageName);
+
                 // Return to home screen
                 Intent homeIntent = new Intent(Intent.ACTION_MAIN);
                 homeIntent.addCategory(Intent.CATEGORY_HOME);
@@ -207,8 +230,17 @@ public class AppUsageMonitor {
             windowManager.removeView(overlayView);
             overlayView = null;
         }
+        isOverlayActive = false;
+        lastAppPackage = "";
+
+        // Add the current app to allowed session when user clicks "continue"
+        String currentApp = getCurrentForegroundApp();
+        if (currentApp != null && blockedApps.contains(currentApp)) {
+            allowedThisSession.add(currentApp);
+        }   
+
     }
-    
+
     private String getAppName(String packageName) {
         try {
             PackageManager pm = context.getPackageManager();

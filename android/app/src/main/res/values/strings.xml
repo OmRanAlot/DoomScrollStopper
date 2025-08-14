@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">DoomScrollStopper</string>
+    <string name="accessibility_service_description">Monitor app usage to help reduce doom scrolling by detecting when blocked apps are opened</string>
 </resources>

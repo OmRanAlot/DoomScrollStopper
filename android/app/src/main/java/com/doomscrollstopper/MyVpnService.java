@@ -12,6 +12,8 @@ import android.net.VpnService;
 import android.os.Build;
 import android.content.pm.PackageManager;
 import androidx.core.app.NotificationCompat;
+import android.accessibilityservice.AccessibilityService;
+import android.view.accessibility.AccessibilityEvent;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -27,6 +29,11 @@ import java.nio.ByteBuffer;
 import java.nio.channels.DatagramChannel;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.Locale;
+
+import com.facebook.react.bridge.Arguments;
+import com.facebook.react.bridge.ReactApplicationContext;
+import com.facebook.react.bridge.WritableMap;
+import com.facebook.react.modules.core.DeviceEventManagerModule;
 
 // The actual VPN that READS the incoming data
 public class MyVpnService extends VpnService {

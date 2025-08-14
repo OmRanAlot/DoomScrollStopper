@@ -11,17 +11,10 @@ import {
   NativeEventEmitter,
   FlatList,
   TextInput,
+  AppState,
 } from 'react-native';
 const { VPNModule } = NativeModules;
-
-const { AppBlocker } = NativeModules;
-const appBlockerEmitter = new NativeEventEmitter(AppBlocker);
-
-console.log('VPNModule:', NativeModules.VPNModule);
-console.log('AppBlocker:', NativeModules.AppBlocker);
-VPNModule.getInstalledApps()
-  .then(apps => console.log(apps))
-  .catch(err => console.error(err));
+const appBlockerEmitter = new NativeEventEmitter(VPNModule);
 
 
 const VPNSwitch = () => {
@@ -30,6 +23,7 @@ const VPNSwitch = () => {
   const [blockedApps, setBlockedApps] = useState(new Set());
   const [detectedApps, setDetectedApps] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [appState, setAppState] = useState(AppState.currentState);
 
   useEffect(() => {
     // Load installed apps
@@ -39,8 +33,10 @@ const VPNSwitch = () => {
     const detectionListener = appBlockerEmitter.addListener(
       'onAppDetected',
       (event) => {
-        console.log('App detected:', event);
-        addDetectedApp(event);
+        console.log('App detected event received:', event);
+        if (event && event.packageName) {
+          addDetectedApp(event);
+        }
       }
     );
 
@@ -51,18 +47,46 @@ const VPNSwitch = () => {
       }
     );
 
+    // Monitor app state changes
+    const appStateListener = AppState.addEventListener('change', (nextAppState) => {
+      console.log('App state changed:', appState, '->', nextAppState);
+      setAppState(nextAppState);
+      
+      // Restart monitoring if app becomes active and was monitoring
+      if (appState.match(/inactive|background/) && nextAppState === 'active' && isMonitoring) {
+        console.log('Restarting monitoring after app resume');
+        restartMonitoring();
+      }
+    });
+
     return () => {
       detectionListener.remove();
       blockedListener.remove();
+      appStateListener?.remove();
     };
-  }, []);
+  }, [appState, isMonitoring]);
+
+  const restartMonitoring = async () => {
+    try {
+      await VPNModule.stopMonitoring();
+      setTimeout(async () => {
+        await VPNModule.startMonitoring();
+        console.log('Monitoring restarted successfully');
+      }, 1000);
+    } catch (error) {
+      console.error('Failed to restart monitoring:', error);
+    }
+  };
 
   const loadInstalledApps = async () => {
     try {
       const apps = await VPNModule.getInstalledApps();
+      // console.log('Loaded apps count:', apps.length);
       setInstalledApps(apps);
     } catch (error) {
       console.error('Failed to load apps:', error);
+      Alert.alert('Error', 'Failed to load installed apps');
+
     }
   };
 
@@ -73,7 +97,15 @@ const VPNSwitch = () => {
       Alert.alert(
         'Permission Required',
         'Please grant Usage Access permission and return to the app',
-        [{ text: 'OK' }]
+        [
+          { 
+            text: 'OK', 
+            onPress: () => {
+              // Give user time to grant permission
+              setTimeout(checkPermissionsAndStart, 3000);
+            }
+          }
+        ]
       );
     } catch (error) {
       console.error('Permission request failed:', error);
@@ -86,28 +118,59 @@ const VPNSwitch = () => {
       Alert.alert(
         'Permission Required',
         'Please grant Display Over Other Apps permission and return to the app',
-        [{ text: 'OK' }]
+        [
+          { 
+            text: 'OK',
+            onPress: () => {
+              setTimeout(startMonitoringAfterPermissions, 2000);
+            }
+          }
+        ]
       );
     } catch (error) {
       console.error('Overlay permission request failed:', error);
     }
   };
 
+  const checkPermissionsAndStart = () => {
+    requestOverlayPermission();
+  };
+
+  const startMonitoringAfterPermissions = async () => {
+    console.log('DEBUG: startMonitoringAfterPermissions triggered');
+    try {
+      console.log('Starting monitoring with blocked apps:', Array.from(blockedApps));
+      
+      // Set blocked apps first
+      if (blockedApps.size > 0) {
+        await VPNModule.setBlockedApps(Array.from(blockedApps));
+      }
+      
+      console.log('Calling VPNModule.startMonitoring()...');
+      // Then start monitoring
+      await VPNModule.startMonitoring();
+      console.log('startMonitoring promise resolved');
+
+      setIsMonitoring(true);
+      
+      Alert.alert('Success', 'Monitoring started successfully!');
+      console.log('Monitoring started successfully');
+    } catch (error) {
+      console.error('Failed to start monitoring:', error);
+      Alert.alert('Error', 'Failed to start monitoring: ' + error.message);
+    }
+  };
+
   const toggleMonitoring = async () => {
     try {
       if (!isMonitoring) {
+        console.log("requesting permissions")
         // Request permissions first
         await requestPermissions();
-        setTimeout(async () => {
-          await requestOverlayPermission();
-          setTimeout(async () => {
-            await VPNModule.startMonitoring();
-            setIsMonitoring(true);
-          }, 1000);
-        }, 1000);
       } else {
         await VPNModule.stopMonitoring();
         setIsMonitoring(false);
+        console.log("Monitoring stopped successfully")
       }
     } catch (error) {
       console.error('Failed to toggle monitoring:', error);
@@ -132,10 +195,13 @@ const VPNSwitch = () => {
   };
 
   const addDetectedApp = (appInfo) => {
+    console.log('Adding detected app:', appInfo);
     setDetectedApps((prev) => {
-      const newList = [appInfo, ...prev.slice(0, 19)]; // Keep last 20
+      // Keep last 10 detected apps
+      const newList = [appInfo, ...prev.slice(0, 9)];
       return newList;
     });
+    console.log('Updated detected apps:', detectedApps);
   };
 
   const filteredApps = installedApps.filter((app) =>
@@ -158,14 +224,17 @@ const VPNSwitch = () => {
     </View>
   );
 
-  const renderDetectedApp = ({ item }) => (
-    <View style={styles.detectedItem}>
-      <Text style={styles.detectedAppName}>{item.appName}</Text>
-      <Text style={styles.detectedTime}>
-        {new Date(item.timestamp).toLocaleTimeString()}
-      </Text>
-    </View>
-  );
+  const renderDetectedApp = ({ item }) => {
+    return <View style={styles.detectedItem}>
+            <View style={styles.detectedInfo}>
+              <Text style={styles.detectedAppName}>{item.appName || 'Unknown App'}</Text>
+              <Text style={styles.detectedPackage}>{item.packageName}</Text>
+            </View>
+            <Text style={styles.detectedTime}>
+              {new Date(item.timestamp).toLocaleTimeString()}
+            </Text>
+          </View>
+  };
 
   return (
     <ScrollView style={styles.container}>
@@ -181,7 +250,13 @@ const VPNSwitch = () => {
           <Text style={styles.controlLabel}>Monitoring Active</Text>
           <Switch
             value={isMonitoring}
-            onValueChange={toggleMonitoring}
+            onValueChange={(value) => {
+              if (value) {
+                startMonitoringAfterPermissions();
+              } else {
+                stopMonitoring();
+              }
+            }}
             trackColor={{ false: '#767577', true: '#4CAF50' }}
             thumbColor={isMonitoring ? '#fff' : '#f4f3f4'}
           />
@@ -191,23 +266,25 @@ const VPNSwitch = () => {
           <View style={styles.statusBox}>
             <Text style={styles.statusText}>✓ Monitoring apps in background</Text>
             <Text style={styles.statusSubtext}>
-              Blocked apps will show a 15-second delay screen
+              Blocked apps: {blockedApps.size} • Will show 15-second delay screen
             </Text>
           </View>
         )}
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Recently Detected Apps</Text>
+        <Text style={styles.sectionTitle}>Recently Detected Apps ({detectedApps.length})</Text>
         {detectedApps.length > 0 ? (
           <FlatList
-            data={detectedApps.slice(0, 5)}
+            data={detectedApps.slice(0, 10)}
             renderItem={renderDetectedApp}
             keyExtractor={(item, index) => `${item.packageName}-${index}`}
             scrollEnabled={false}
           />
         ) : (
-          <Text style={styles.emptyText}>No apps detected yet</Text>
+          <Text style={styles.emptyText}>
+            No apps detected yet. {isMonitoring ? 'Switch between apps to test detection.' : 'Start monitoring first.'}
+          </Text>
         )}
       </View>
 
@@ -245,7 +322,8 @@ const VPNSwitch = () => {
           2. Select apps you want to block or delay{'\n'}
           3. Turn on monitoring{'\n'}
           4. When you open a blocked app, you'll see a 15-second delay screen{'\n'}
-          5. You can choose to continue or go back
+          5. You can choose to continue or go back{'\n\n'}
+          Debug: App state is {appState}
         </Text>
       </View>
     </ScrollView>

@@ -13,7 +13,7 @@ import {
   TextInput,
   AppState,
 } from 'react-native';
-const { VPNModule } = NativeModules;
+const { VPNModule, SettingsModule } = NativeModules;
 const appBlockerEmitter = new NativeEventEmitter(VPNModule);
 
 
@@ -26,8 +26,24 @@ const VPNSwitch = () => {
   const [appState, setAppState] = useState(AppState.currentState);
 
   useEffect(() => {
-    // Load installed apps
-    loadInstalledApps();
+    const initialize = async () => {
+      try {
+        // Load blocked apps from persistent storage
+        const savedBlockedApps = await new Promise((resolve, reject) => {
+          SettingsModule.getBlockedApps((apps) => resolve(apps));
+        });
+        if (savedBlockedApps) {
+          setBlockedApps(new Set(savedBlockedApps));
+        }
+  
+        // Load installed apps
+        await loadInstalledApps();
+      } catch (error) {
+        console.error('Failed to load blocked apps or installed apps:', error);
+      }
+    };
+
+    initialize();
 
     // Set up event listeners
     const detectionListener = appBlockerEmitter.addListener(
@@ -49,14 +65,13 @@ const VPNSwitch = () => {
 
     // Monitor app state changes
     const appStateListener = AppState.addEventListener('change', (nextAppState) => {
-      console.log('App state changed:', appState, '->', nextAppState);
-      setAppState(nextAppState);
-      
-      // Restart monitoring if app becomes active and was monitoring
-      if (appState.match(/inactive|background/) && nextAppState === 'active' && isMonitoring) {
-        console.log('Restarting monitoring after app resume');
-        restartMonitoring();
-      }
+      setAppState(prevState => {
+        if (prevState.match(/inactive|background/) && nextAppState === 'active' && isMonitoring) {
+          console.log('Restarting monitoring after app resume');
+          restartMonitoring();
+        }
+        return nextAppState;
+      });
     });
 
     return () => {
@@ -64,8 +79,8 @@ const VPNSwitch = () => {
       blockedListener.remove();
       appStateListener?.remove();
     };
-  }, [appState, isMonitoring]);
-
+  }, []);
+ 
   const restartMonitoring = async () => {
     try {
       await VPNModule.stopMonitoring();
@@ -132,8 +147,17 @@ const VPNSwitch = () => {
     }
   };
 
-  const checkPermissionsAndStart = () => {
-    requestOverlayPermission();
+  const checkPermissionsAndStart = async () => {
+    const perms = await VPNModule.checkPermissions();
+    if (!perms.usage) {
+      await VPNModule.requestPermissions();
+      return;
+    }
+    if (!perms.overlay) {
+      await VPNModule.requestOverlayPermission();
+      return;
+    }
+    await startMonitoringAfterPermissions();
   };
 
   const startMonitoringAfterPermissions = async () => {
@@ -161,6 +185,17 @@ const VPNSwitch = () => {
     }
   };
 
+  const stopMonitoring = async () => {
+    try {
+      await VPNModule.stopMonitoring();
+      setIsMonitoring(false);
+      console.log("Monitoring stopped successfully");
+    } catch (error) {
+      console.error("Failed to stop monitoring:", error);
+      Alert.alert("Error", "Failed to stop monitoring: " + error.message);
+    }
+  };
+
   const toggleMonitoring = async () => {
     try {
       if (!isMonitoring) {
@@ -180,6 +215,7 @@ const VPNSwitch = () => {
 
   const toggleAppBlock = async (packageName) => {
     const newBlockedApps = new Set(blockedApps);
+    console.log('Toggling app block for:', packageName);
     if (newBlockedApps.has(packageName)) {
       newBlockedApps.delete(packageName);
     } else {
@@ -187,11 +223,16 @@ const VPNSwitch = () => {
     }
     setBlockedApps(newBlockedApps);
 
+    SettingsModule.saveBlockedApps(Array.from(newBlockedApps));
+
     try {
       await VPNModule.setBlockedApps(Array.from(newBlockedApps));
     } catch (error) {
       console.error('Failed to update blocked apps:', error);
     }
+
+
+    console.log('Updated blocked apps:', Array.from(newBlockedApps));
   };
 
   const addDetectedApp = (appInfo) => {
@@ -199,9 +240,10 @@ const VPNSwitch = () => {
     setDetectedApps((prev) => {
       // Keep last 10 detected apps
       const newList = [appInfo, ...prev.slice(0, 9)];
+      console.log('Updated detected apps:', newList);
+
       return newList;
     });
-    console.log('Updated detected apps:', detectedApps);
   };
 
   const filteredApps = installedApps.filter((app) =>

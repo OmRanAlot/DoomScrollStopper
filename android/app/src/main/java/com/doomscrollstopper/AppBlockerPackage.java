@@ -14,6 +14,7 @@ public class AppBlockerPackage implements ReactPackage {
     public List<NativeModule> createNativeModules(ReactApplicationContext reactContext) {
         List<NativeModule> modules = new ArrayList<>();
         modules.add(new VPNModule(reactContext));
+        modules.add(new SettingsModule(reactContext));
         return modules;
     }
 

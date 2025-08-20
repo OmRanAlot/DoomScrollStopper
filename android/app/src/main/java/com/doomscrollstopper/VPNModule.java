@@ -1,5 +1,6 @@
 package com.doomscrollstopper;
 
+
 import android.content.Intent;
 import android.provider.Settings;
 import com.facebook.react.bridge.Arguments;
@@ -17,11 +18,14 @@ import com.facebook.react.bridge.Callback;
 import java.util.List;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.ArrayList;
 import android.app.ActivityManager;
 import android.content.Context;
 import android.net.VpnService;
 import android.os.Build;
 import android.util.Log;
+import android.app.AppOpsManager;
+import android.content.pm.ApplicationInfo;
 //This module doesn't send any packet or traffic data back to React Native.
 //It's just a "control switch" — start/stop the VPN.
 // Just turns the VPN on or off from react native code
@@ -60,6 +64,16 @@ public class VPNModule extends ReactContextBaseJavaModule {
         Log.d("VPNModule", "startMonitoring called");
         try {
             Log.d("VPNModule", "Starting monitoring");
+
+            Intent serviceIntent = new Intent(reactContext, MyVpnService.class);
+            serviceIntent.setAction("START_VPN");
+            
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                reactContext.startForegroundService(serviceIntent);
+            } else {
+                reactContext.startService(serviceIntent);
+            }
+
             appMonitor.startMonitoring();
             Log.d("VPNModule", "startMonitoring success, resolving promise");
             promise.resolve(true);
@@ -74,6 +88,11 @@ public class VPNModule extends ReactContextBaseJavaModule {
         try {
             Log.d("VPNModule", "Stopping monitoring");
             appMonitor.stopMonitoring();
+            
+            Intent serviceIntent = new Intent(reactContext, MyVpnService.class);
+            serviceIntent.setAction("STOP_VPN");
+            reactContext.stopService(serviceIntent);
+            
             Log.d("VPNModule", "stopMonitoring success, resolving promise");
             promise.resolve(true);
         } catch (Exception e) {
@@ -85,13 +104,35 @@ public class VPNModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void setBlockedApps(ReadableArray apps, Promise promise) {
         try {
-            Log.d("VPNModule", "Setting blocked apps");
             Set<String> blockedApps = new HashSet<>();
-            for (int i = 0; i < apps.size(); i++) {
-                blockedApps.add(apps.getString(i));
+
+            if (apps != null){
+                if (apps.size() == 1 && apps.getType(0) == com.facebook.react.bridge.ReadableType.String) {
+                    String single = apps.getString(0);
+                    if (single != null && single.contains(".")) {
+                        blockedApps.add(single);
+                    }
+                } else {
+                    // ✅ Normal case: proper array of strings
+                    for (int i = 0; i < apps.size(); i++) {
+                        if (apps.getType(i) == com.facebook.react.bridge.ReadableType.String) {
+                            blockedApps.add(apps.getString(i));
+                        }
+                    }
+                }
             }
-            appMonitor.setBlockedApps(blockedApps);
-            Log.d("VPNModule", "setBlockedApps success, resolving promise");
+    
+            // Send intent to service
+            Intent intent = new Intent(reactContext, MyVpnService.class);
+            intent.setAction("UPDATE_BLOCKED_APPS");
+            intent.putStringArrayListExtra("blockedApps", new ArrayList<>(blockedApps));
+            
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                reactContext.startForegroundService(intent);
+            } else {
+                reactContext.startService(intent);
+            }
+    
             promise.resolve(true);
         } catch (Exception e) {
             promise.reject("SET_APPS_ERROR", e.getMessage());
@@ -163,8 +204,9 @@ public class VPNModule extends ReactContextBaseJavaModule {
         try {
             Intent intent = VpnService.prepare(reactContext);
             if (intent != null) {
-                // Permission needed
-                reactContext.startActivityForResult(intent, 1, null);
+                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                reactContext.startActivity(intent);
+                promise.resolve(false); // user must grant permission
             } else {
                 // Permission already granted
                 Log.d("VPNModule", "requestVpnPermission success, resolving promise");
@@ -180,6 +222,7 @@ public class VPNModule extends ReactContextBaseJavaModule {
     public void startVpnService(Promise promise) {
         try {
             Intent serviceIntent = new Intent(reactContext, MyVpnService.class);
+            
             serviceIntent.setAction("START_VPN");
             
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -227,5 +270,25 @@ public class VPNModule extends ReactContextBaseJavaModule {
         }
     }
 
+
+    @ReactMethod
+    public void checkPermissions(Promise promise) {
+        WritableMap result = Arguments.createMap();
+        result.putBoolean("overlay", Settings.canDrawOverlays(reactContext));
+        result.putBoolean("usage", hasUsageAccessPermission());
+        promise.resolve(result);
+    }
+
+    private boolean hasUsageAccessPermission() {
+        try {
+            AppOpsManager appOps = (AppOpsManager) reactContext.getSystemService(Context.APP_OPS_SERVICE);
+            ApplicationInfo appInfo = reactContext.getPackageManager().getApplicationInfo(reactContext.getPackageName(), 0);
+            int mode = appOps.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS,
+                    appInfo.uid, appInfo.packageName);
+            return (mode == AppOpsManager.MODE_ALLOWED);
+        } catch (Exception e) {
+            return false;
+        }
+}
 
 }

@@ -11,6 +11,9 @@ import android.content.Intent;
 import android.net.VpnService;
 import android.os.Build;
 import android.content.pm.PackageManager;
+import android.os.ParcelFileDescriptor;
+import android.util.Log;
+import android.os.IBinder;
 import androidx.core.app.NotificationCompat;
 import android.accessibilityservice.AccessibilityService;
 import android.view.accessibility.AccessibilityEvent;
@@ -18,10 +21,8 @@ import android.view.accessibility.AccessibilityEvent;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 
-import android.os.ParcelFileDescriptor;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
-import android.util.Log;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.net.InetSocketAddress;
@@ -29,19 +30,23 @@ import java.nio.ByteBuffer;
 import java.nio.channels.DatagramChannel;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.Locale;
+import java.util.Set;
+import java.util.HashSet;
+import java.util.ArrayList;
 
 import com.facebook.react.bridge.Arguments;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.WritableMap;
 import com.facebook.react.modules.core.DeviceEventManagerModule;
 
-// The actual VPN that READS the incoming data
+// The actual VPN that READS the incoming data and creates a Notification so the service runs in background
 public class MyVpnService extends VpnService {
     private static final String TAG = "MyVpnService";
     private static final String NOTIFICATION_CHANNEL_ID = "DoomScrollStopperVPN";
     private static final int NOTIFICATION_ID = 1;
     private static final String LOG_TAG = "VPNActivity";
     
+    private AppUsageMonitor monitor;
     private ParcelFileDescriptor vpnInterface;
     private boolean isRunning = false;
     private Thread vpnThread;
@@ -51,81 +56,108 @@ public class MyVpnService extends VpnService {
     public interface AppMonitorCallback {
         void onAppDetected(String packageName);
     }
-    
+
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        createNotificationChannel();
+
+        Notification notification = createNotification("VPN Active");
+        startForeground(NOTIFICATION_ID, notification);
+
+        monitor = new AppUsageMonitor(this);
+        // Restore blocked apps
+        Set<String> savedBlockedApps = loadBlockedApps();
+        if (savedBlockedApps != null) {
+            monitor.setBlockedApps(savedBlockedApps);
+        }
+
+        // Set up listener as before
+        monitor.setListener(new AppUsageMonitor.AppDetectionListener() {
+            @Override
+            public void onAppDetected(String packageName, String appName) { /*...*/ }
+            @Override
+            public void onBlockedAppOpened(String packageName, String appName) { /*...*/ }
+        });
+        
+    }
+    // Start the VPN service
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        if (intent != null && "START_VPN".equals(intent.getAction())) {
-            startVPN(intent);
-        } else if (intent != null && "STOP_VPN".equals(intent.getAction())) {
-            stopVPN(intent);
+
+        if (intent != null){
+            String action = intent.getAction();
+            if ("START_VPN".equals(action)) {
+                Notification notification = createNotification("VPN Active");
+                startForeground(NOTIFICATION_ID, notification);
+                startMonitoring();
+            } else if ("STOP_VPN".equals(action)) {
+                stopMonitoring();
+                stopForeground(true);
+                stopSelf();
+            } else if ("UPDATE_BLOCKED_APPS".equals(action)) {
+                Set<String> blocked = new HashSet<>(intent.getStringArrayListExtra("blockedApps"));
+                if (monitor != null) monitor.setBlockedApps(blocked);
+                saveBlockedApps(blocked);
+            }
         }
-        
+
+        // Return START_STICKY so service restarts if killed
         return START_STICKY;
     }
 
-    private void startVPN(Intent intent) {
-        if (vpnInterface == null) {
-            startForeground(NOTIFICATION_ID, createNotification("VPN Active"));
-            Builder builder = new Builder();
-            builder.setSession("Doom Scroll Stopper")
-                .addAddress("10.0.0.2", 24)
-                .addRoute("0.0.0.0", 0)
-                .addDnsServer("8.8.8.8")
-                .addDnsServer("8.8.4.4")
-                .setMtu(1400);
-            
-            try {
-                builder.addDisallowedApplication(getPackageName());
-            } catch (PackageManager.NameNotFoundException e){
-                Log.e(TAG, "Failed to add disallowed application", e);
-            }
+    // Start monitoring
+    private void startMonitoring() {
+        // vpnThread = new Thread(() -> {
+        //     try {
+        //         DatagramChannel tunnel = DatagramChannel.open();
+        //         tunnel.connect(new InetSocketAddress("127.0.0.1", 8087));
+        //         tunnel.configureBlocking(false);
+                
+        //         FileInputStream in = new FileInputStream(vpnInterface.getFileDescriptor());
+        //         FileOutputStream out = new FileOutputStream(vpnInterface.getFileDescriptor());
+                
+        //         ByteBuffer packet = ByteBuffer.allocate(32767);
+                
+        //         while (!Thread.interrupted()) {
+        //             int length = in.read(packet.array());
+        //             if (length > 0) {
+        //                 packet.limit(length);
+                        
+        //                 // Parse packet to detect app
+        //                 String detectedApp = parsePacket(packet);
+        //                 if (detectedApp != null && callback != null) {
+        //                     callback.onAppDetected(detectedApp);
+        //                 }
+                        
+        //                 // Forward packet
+        //                 out.write(packet.array(), 0, length);
+        //                 packet.clear();
+        //             }
+                    
+        //             Thread.sleep(10);
+        //         }
+        //     } catch (Exception e) {
+        //         Log.e(TAG, "VPN monitoring error", e);
+        //     }
+        // });
+        // vpnThread.start();
+        if (monitor == null) {
+            monitor = new AppUsageMonitor(this);
+            monitor.startMonitoring();
+        }
+        
+    }
 
-            // Create the VPN interface
-            vpnInterface = builder.establish();
-            
-            if (vpnInterface != null) {
-                startMonitoring();
-            }
+    // Stop monitoring
+    private void stopMonitoring() {
+        if (monitor != null) {
+            monitor.stopMonitoring();
+            monitor = null;
         }
     }
 
-    private void startMonitoring() {
-        vpnThread = new Thread(() -> {
-            try {
-                DatagramChannel tunnel = DatagramChannel.open();
-                tunnel.connect(new InetSocketAddress("127.0.0.1", 8087));
-                tunnel.configureBlocking(false);
-                
-                FileInputStream in = new FileInputStream(vpnInterface.getFileDescriptor());
-                FileOutputStream out = new FileOutputStream(vpnInterface.getFileDescriptor());
-                
-                ByteBuffer packet = ByteBuffer.allocate(32767);
-                
-                while (!Thread.interrupted()) {
-                    int length = in.read(packet.array());
-                    if (length > 0) {
-                        packet.limit(length);
-                        
-                        // Parse packet to detect app
-                        String detectedApp = parsePacket(packet);
-                        if (detectedApp != null && callback != null) {
-                            callback.onAppDetected(detectedApp);
-                        }
-                        
-                        // Forward packet
-                        out.write(packet.array(), 0, length);
-                        packet.clear();
-                    }
-                    
-                    Thread.sleep(10);
-                }
-            } catch (Exception e) {
-                Log.e(TAG, "VPN monitoring error", e);
-            }
-        });
-        vpnThread.start();
-    }
-
+    // Parse packet to detect app
     private String parsePacket(ByteBuffer packet) {
         // Simple packet inspection to detect app
         // This is a simplified version - you'd need more sophisticated parsing
@@ -151,6 +183,7 @@ public class MyVpnService extends VpnService {
         return null;
     }
 
+    // Map port to app
     private String mapPortToApp(int port) {
         // This is a simplified mapping - you'd need a more comprehensive solution
         switch (port) {
@@ -166,6 +199,37 @@ public class MyVpnService extends VpnService {
         }
     }
     
+    // Start the VPN
+    private void startVPN(Intent intent) {
+        if (vpnInterface == null) {
+            startForeground(NOTIFICATION_ID, createNotification("VPN Active"));
+            Builder builder = new Builder();
+            builder.setSession("Doom Scroll Stopper")
+                .addAddress("10.0.0.2", 24)
+                .addRoute("0.0.0.0", 0)
+                .addDnsServer("8.8.8.8")
+                .addDnsServer("8.8.4.4")
+                .setMtu(1400);
+            
+            try {
+                builder.addDisallowedApplication(getPackageName());
+            } catch (PackageManager.NameNotFoundException e){
+                Log.e(TAG, "Failed to add disallowed application", e);
+            }
+
+            // Create the VPN interface
+            vpnInterface = builder.establish();
+            
+            if (vpnInterface != null) {
+                if (monitor != null) {
+                    monitor.startMonitoring();
+                }
+            }
+        }
+    }
+
+
+    // Stop the VPN
     private void stopVPN(Intent intent) {
         if (vpnThread != null) {
             vpnThread.interrupt();
@@ -180,24 +244,74 @@ public class MyVpnService extends VpnService {
         }
     }
     
-    private Notification createNotification(String text) {
-        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "vpn_channel")
+    // Create notification for foreground service
+    private Notification createNotification(String contentText) {
+        Intent notificationIntent = new Intent(this, MainActivity.class);
+        PendingIntent pendingIntent = PendingIntent.getActivity(
+            this, 0, notificationIntent, 
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
             .setContentTitle("DoomScrollStopper")
-            .setContentText(text)
+            .setContentText(contentText)
             .setSmallIcon(R.drawable.ic_vpn)
-            .setPriority(NotificationCompat.PRIORITY_LOW);
-    
+            .setContentIntent(pendingIntent)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true);
         return builder.build();
     }
     
+    // Create notification channel for Android O and above
+    private void createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(
+                NOTIFICATION_CHANNEL_ID,
+                "App Monitoring",
+                NotificationManager.IMPORTANCE_LOW
+            );
+            channel.setDescription("Monitors app usage to show delay screens");
+            
+            NotificationManager manager = getSystemService(NotificationManager.class);
+            if (manager != null) {
+                manager.createNotificationChannel(channel);
+            }
+        }
+    }
 
+    // Set callback for app detection
     public void setCallback(AppMonitorCallback callback) {
         this.callback = callback;
     }
     
     @Override
     public void onDestroy() {
-            stopVPN(null);
         super.onDestroy();
+        if (monitor != null) {
+            monitor.stopMonitoring();
+        }
+    }
+
+    public void updateBlockedApps(Set<String> blockedApps) {
+        if (monitor != null) {
+            monitor.setBlockedApps(blockedApps);
+        }
+    }
+
+    private void saveBlockedApps(Set<String> blockedApps) {
+        getSharedPreferences("doomscroll_prefs", Context.MODE_PRIVATE)
+            .edit()
+            .putStringSet("blockedApps", blockedApps)
+            .apply();
+    }
+    
+    private Set<String> loadBlockedApps() {
+        return getSharedPreferences("doomscroll_prefs", Context.MODE_PRIVATE)
+            .getStringSet("blockedApps", new HashSet<>());
+    }
+    
+    
+    @Override
+    public IBinder onBind(Intent intent) {
+        return null;
     }
 }

@@ -12,6 +12,7 @@ import com.facebook.react.defaults.DefaultReactNativeHost
 import com.doomscrollstopper.VPNModule
 import com.doomscrollstopper.AppUsageMonitor
 import com.doomscrollstopper.AppBlockerPackage
+import com.doomscrollstopper.SettingsModule
 import com.doomscrollstopper.BuildConfig
 
 class MainApplication : Application(), ReactApplication {

@@ -18,6 +18,8 @@ import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.TextView;
+import android.content.SharedPreferences;
+
 
 import java.util.HashSet;
 import java.util.List;
@@ -25,6 +27,8 @@ import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
+
+//MAIN APP MONITOR LOGIC
 
 public class AppUsageMonitor {
     private static final String TAG = "AppUsageMonitor";
@@ -42,7 +46,6 @@ public class AppUsageMonitor {
     private String currentForegroundApp = "";
     private Set<String> allowedThisSession = new HashSet<>();
 
-
     public interface AppDetectionListener {
         void onAppDetected(String packageName, String appName);
         void onBlockedAppOpened(String packageName, String appName);
@@ -57,52 +60,74 @@ public class AppUsageMonitor {
         this.handler = new Handler(Looper.getMainLooper());
     }
     
+
+
     public void startMonitoring() {
-        if (!hasUsageStatsPermission()) {
-            requestUsageStatsPermission();
-            return;
+        try{
+            if (!hasUsageStatsPermission()) {
+                requestUsageStatsPermission();
+                return;
+            }
+            
+            if (!hasOverlayPermission()) {
+                requestOverlayPermission();
+                return;
+            }
+            
+            loadBlockedAppsFromPrefs();
+            isMonitoring = true;
+
+            new Thread(() -> {
+                monitorApps();
+            }).start();
+        } catch (Exception e){
+            Log.e(TAG, "Error starting monitoring", e);
         }
-        
-        if (!hasOverlayPermission()) {
-            requestOverlayPermission();
-            return;
-        }
-        
-        isMonitoring = true;
-        monitorApps();
     }
     
+    public void loadBlockedAppsFromPrefs() {
+        SharedPreferences prefs = context.getSharedPreferences("doomscroll_prefs", Context.MODE_PRIVATE);
+        Set<String> appSet = prefs.getStringSet("blocked_apps", new HashSet<>());
+        blockedApps = new HashSet<>(appSet); // make a copy
+    }
+
     private void monitorApps() {
+        Handler handler = new Handler(Looper.getMainLooper());
+        
         Runnable runnable = new Runnable() {
             @Override
             public void run() {
-                String foregroundApp = getCurrentForegroundApp();
-    
-                if (foregroundApp != null && !foregroundApp.equals(context.getPackageName())) {
-                    String appName = getAppName(foregroundApp);
-    
-                    // Always trigger block if app is in blocked list
-                    if (blockedApps.contains(foregroundApp) && !isOverlayActive 
-                        && !allowedThisSession.contains(foregroundApp)) {
-                        Log.d("AppMonitor", "Blocked app detected: " + appName);
-                        handleBlockedApp(foregroundApp, appName);
-                    }
-
-                    // If user switches away from an allowed app, remove it from allowed session
-                    if (!foregroundApp.equals(currentForegroundApp)) {
-                        if (currentForegroundApp != null && !currentForegroundApp.isEmpty()) {
-                            allowedThisSession.remove(currentForegroundApp);
+                try{
+                    String foregroundApp = getCurrentForegroundApp();
+        
+                    if (foregroundApp != null && !foregroundApp.equals(context.getPackageName())) {
+                        String appName = getAppName(foregroundApp);
+        
+                        // Always trigger block if app is in blocked list
+                        if (blockedApps.contains(foregroundApp) && !isOverlayActive 
+                            && !allowedThisSession.contains(foregroundApp)) {
+                            Log.d("AppMonitor", "Blocked app detected: " + appName);
+                            handleBlockedApp(foregroundApp, appName);
                         }
-                        currentForegroundApp = foregroundApp;
+
+                        // If user switches away from an allowed app, remove it from allowed session
+                        if (!foregroundApp.equals(currentForegroundApp)) {
+                            if (currentForegroundApp != null && !currentForegroundApp.isEmpty()) {
+                                allowedThisSession.remove(currentForegroundApp);
+                            }
+                            currentForegroundApp = foregroundApp;
+                        }   
+
                     }   
+                    // // Repeat every second
+                    // handler.postDelayed(this, 1000);
 
-                }   
-                // // Repeat every second
-                // handler.postDelayed(this, 1000);
-
-                // Repeat every second
-                if (isMonitoring) {
-                    handler.postDelayed(this, 1000);
+                    // Repeat every second
+                    if (isMonitoring) {
+                        handler.postDelayed(this, 1000);
+                    }   
+                } catch (Exception e){
+                    Log.e(TAG, "Error monitoring apps", e);
                 }   
             }
         };
@@ -111,22 +136,27 @@ public class AppUsageMonitor {
     }
     
     private String getCurrentForegroundApp() {
-        long currentTime = System.currentTimeMillis();
-        List<UsageStats> stats = usageStatsManager.queryUsageStats(
-            UsageStatsManager.INTERVAL_DAILY, 
-            currentTime - 1000 * 60, // Last minute
-            currentTime
-        );
-        
-        if (stats != null && !stats.isEmpty()) {
-            SortedMap<Long, UsageStats> sortedMap = new TreeMap<>();
-            for (UsageStats usageStats : stats) {
-                sortedMap.put(usageStats.getLastTimeUsed(), usageStats);
-            }
+        try{
+            long currentTime = System.currentTimeMillis();
+            List<UsageStats> stats = usageStatsManager.queryUsageStats(
+                UsageStatsManager.INTERVAL_DAILY, 
+                currentTime - 1000 * 60, // Last minute
+                currentTime
+            );
             
-            if (!sortedMap.isEmpty()) {
-                return sortedMap.get(sortedMap.lastKey()).getPackageName();
+            if (stats != null && !stats.isEmpty()) {
+                SortedMap<Long, UsageStats> sortedMap = new TreeMap<>();
+                for (UsageStats usageStats : stats) {
+                    sortedMap.put(usageStats.getLastTimeUsed(), usageStats);
+                }
+                
+                if (!sortedMap.isEmpty()) {
+                    return sortedMap.get(sortedMap.lastKey()).getPackageName();
+                }
             }
+        } catch (Exception e){
+            Log.e(TAG, "Error getting current foreground app", e);
+
         }
         return null;
     }

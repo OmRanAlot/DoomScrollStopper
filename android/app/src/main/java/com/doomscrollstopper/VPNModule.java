@@ -126,7 +126,7 @@ public class VPNModule extends ReactContextBaseJavaModule {
             Intent intent = new Intent(reactContext, MyVpnService.class);
             intent.setAction("UPDATE_BLOCKED_APPS");
             intent.putStringArrayListExtra("blockedApps", new ArrayList<>(blockedApps));
-            
+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 reactContext.startForegroundService(intent);
             } else {

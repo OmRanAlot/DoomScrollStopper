@@ -1,26 +1,31 @@
 // App.tsx
 import React from 'react';
-import { SafeAreaView, StyleSheet, StatusBar, useColorScheme, Button } from 'react-native';
-import VPNSwitch from './components/VPNSwitch';
-import { Linking } from 'react-native';
+import { SafeAreaView, StyleSheet, useColorScheme } from 'react-native';
+import VPNSwitch from './components/VPNSwitch/VPNSwitch';
+import Home from './components/Home/home';
+import { NavigationContainer } from '@react-navigation/native';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 
+const Tab = createBottomTabNavigator();
 
 const App = () => {
-  const isDarkMode = useColorScheme() === 'dark';
-
-
-  const openUsageAccessSettings = () => {
-    Linking.openSettings(); // basic fallback
-
-    // Or use native module to launch:
-    // android.settings.USAGE_ACCESS_SETTINGS
-  };
   return (
-    <SafeAreaView style={[styles.container, isDarkMode && styles.darkContainer]}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-      <VPNSwitch />
-      {/* <Button title="Enable App Usage Access" onPress={openUsageAccessSettings} /> */}
-    </SafeAreaView>
+    
+      <SafeAreaView style={[styles.container]}>
+        <NavigationContainer>
+          <Tab.Navigator 
+            screenOptions={{
+              headerShown: false,
+              tabBarStyle: { backgroundColor: '#fff', height: 60 },
+              tabBarLabelStyle: { fontSize: 14 }
+            }}
+          >
+            <Tab.Screen name="Home" component={Home} />
+            <Tab.Screen name="VPNSwitch" component={VPNSwitch} />
+          </Tab.Navigator>
+        </NavigationContainer>
+      </SafeAreaView>
+   
   );
 };
 

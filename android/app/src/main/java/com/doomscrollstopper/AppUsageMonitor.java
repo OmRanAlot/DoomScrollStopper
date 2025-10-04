@@ -27,6 +27,9 @@ import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.ArrayList;
+import java.util.Map;
+import java.util.HashMap;
 
 //MAIN APP MONITOR LOGIC
 
@@ -271,7 +274,7 @@ public class AppUsageMonitor {
 
     }
 
-    private String getAppName(String packageName) {
+    public String getAppName(String packageName) {
         try {
             PackageManager pm = context.getPackageManager();
             ApplicationInfo appInfo = pm.getApplicationInfo(packageName, 0);
@@ -323,5 +326,134 @@ public class AppUsageMonitor {
     
     public void setListener(AppDetectionListener listener) {
         this.listener = listener;
+    }
+    
+    public Set<String> getBlockedApps() {
+        return new HashSet<>(blockedApps);
+    }
+    
+    // New methods for getting app usage statistics
+    public long getAppUsageTime(String packageName, long startTime, long endTime) {
+        try {
+            if (!hasUsageStatsPermission()) {
+                return 0;
+            }
+            
+            List<UsageStats> stats = usageStatsManager.queryUsageStats(
+                UsageStatsManager.INTERVAL_DAILY,
+                startTime,
+                endTime
+            );
+            
+            long totalTime = 0;
+            for (UsageStats stat : stats) {
+                if (stat.getPackageName().equals(packageName)) {
+                    totalTime += stat.getTotalTimeInForeground();
+                }
+            }
+            return totalTime;
+        } catch (Exception e) {
+            Log.e(TAG, "Error getting app usage time for " + packageName, e);
+            return 0;
+        }
+    }
+    
+    public long getTotalScreenTime(long startTime, long endTime) {
+        try {
+            if (!hasUsageStatsPermission()) {
+                return 0;
+            }
+            
+            List<UsageStats> stats = usageStatsManager.queryUsageStats(
+                UsageStatsManager.INTERVAL_DAILY,
+                startTime,
+                endTime
+            );
+            
+            long totalTime = 0;
+            for (UsageStats stat : stats) {
+                totalTime += stat.getTotalTimeInForeground();
+            }
+            return totalTime;
+        } catch (Exception e) {
+            Log.e(TAG, "Error getting total screen time", e);
+            return 0;
+        }
+    }
+    
+    public List<AppUsageInfo> getTopAppsByUsage(long startTime, long endTime, int limit) {
+        List<AppUsageInfo> appUsageList = new ArrayList<>();
+        
+        try {
+            if (!hasUsageStatsPermission()) {
+                return appUsageList;
+            }
+            
+            List<UsageStats> stats = usageStatsManager.queryUsageStats(
+                UsageStatsManager.INTERVAL_DAILY,
+                startTime,
+                endTime
+            );
+            
+            // Group by package name and sum up usage time
+            Map<String, Long> appUsageMap = new HashMap<>();
+            for (UsageStats stat : stats) {
+                String packageName = stat.getPackageName();
+                long usageTime = stat.getTotalTimeInForeground();
+                
+                if (appUsageMap.containsKey(packageName)) {
+                    appUsageMap.put(packageName, appUsageMap.get(packageName) + usageTime);
+                } else {
+                    appUsageMap.put(packageName, usageTime);
+                }
+            }
+            
+            // Convert to AppUsageInfo objects and sort by usage time
+            for (Map.Entry<String, Long> entry : appUsageMap.entrySet()) {
+                String packageName = entry.getKey();
+                long usageTime = entry.getValue();
+                
+                if (usageTime > 0) { // Only include apps with actual usage
+                    String appName = getAppName(packageName);
+                    appUsageList.add(new AppUsageInfo(packageName, appName, usageTime));
+                }
+            }
+            
+            // Sort by usage time (descending) and limit results
+            appUsageList.sort((a, b) -> Long.compare(b.usageTime, a.usageTime));
+            if (limit > 0 && appUsageList.size() > limit) {
+                appUsageList = appUsageList.subList(0, limit);
+            }
+            
+        } catch (Exception e) {
+            Log.e(TAG, "Error getting top apps by usage", e);
+        }
+        
+        return appUsageList;
+    }
+    
+    public long getTodayScreenTime() {
+        long endTime = System.currentTimeMillis();
+        long startTime = endTime - (24 * 60 * 60 * 1000); // Last 24 hours
+        return getTotalScreenTime(startTime, endTime);
+    }
+    
+    public long getAppTodayUsageTime(String packageName) {
+        long endTime = System.currentTimeMillis();
+        long startTime = endTime - (24 * 60 * 60 * 1000); // Last 24 hours
+        return getAppUsageTime(packageName, startTime, endTime);
+    }
+    
+    // Helper class to hold app usage information
+    public static class AppUsageInfo {
+        public String packageName;
+        public String appName;
+        public long usageTime;
+        
+        public AppUsageInfo(String packageName, String appName, long usageTime) {
+            this.packageName = packageName;
+            this.appName = appName;
+            this.usageTime = usageTime;
+        }
     }
 }

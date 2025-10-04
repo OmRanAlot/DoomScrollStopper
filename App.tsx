@@ -4,7 +4,6 @@ import { SafeAreaView, StyleSheet, Text } from 'react-native';
 import Home from './components/Home/home';
 import Customize from './components/Customize/customize';
 import Progress from './components/Progress/progress';
-import VPNSwitch from './components/VPNSwitch/VPNSwitch';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 
@@ -45,8 +44,6 @@ const App = () => {
                 iconText = focused ? '⚙️' : '⚙️';
               } else if (route.name === 'Progress') {
                 iconText = focused ? '📊' : '📊';
-              } else if (route.name === 'VPN') {
-                iconText = focused ? '🛡️' : '🛡️';
               }
 
               return <Text style={{ fontSize: 20, color: focused ? '#A8C5F0' : '#6B7280' }}>{iconText}</Text>;
@@ -56,7 +53,6 @@ const App = () => {
           <Tab.Screen name="Home" component={Home} />
           <Tab.Screen name="Customize" component={Customize} />
           <Tab.Screen name="Progress" component={Progress} />
-          <Tab.Screen name="VPN" component={VPNSwitch} />
         </Tab.Navigator>
       </NavigationContainer>
     </SafeAreaView>

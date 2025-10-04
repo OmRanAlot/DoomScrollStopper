@@ -1,13 +1,31 @@
-import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, Switch, TextInput, FlatList, Alert, NativeModules, NativeEventEmitter, AppState, Platform, PermissionsAndroid } from 'react-native';
+import styles from './homeStyle';
+
+const { VPNModule, SettingsModule } = NativeModules;
+const appBlockerEmitter = new NativeEventEmitter(VPNModule);
 
 const Home = () => {
-    const blockedApps = [
-        { name: 'Instagram', icon: '📷', blocked: true },
-        { name: 'TikTok', icon: '🎵', blocked: true },
-        { name: 'Facebook', icon: '📘', blocked: true },
-        { name: 'Twitter', icon: '🐦', blocked: false },
-        { name: 'Snapchat', icon: '👻', blocked: false },
+    const [isMonitoring, setIsMonitoring] = useState(false);
+    const [blockedApps, setBlockedApps] = useState(new Set());
+    const [detectedApps, setDetectedApps] = useState([]);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [installedApps, setInstalledApps] = useState([]);
+    const [appState, setAppState] = useState(AppState.currentState);
+    const [todayScreenTime, setTodayScreenTime] = useState(0);
+    const [blockedAppsUsage, setBlockedAppsUsage] = useState([]);
+    const [topAppsUsage, setTopAppsUsage] = useState([]);
+    const [isLoadingStats, setIsLoadingStats] = useState(false);
+    const [screenTime, setScreenTime] = useState(0);
+    const [hasUsagePermission, setHasUsagePermission] = useState(false);
+
+    // Preset apps that users commonly want to block
+    const presetApps = [
+        { packageName: 'com.instagram.android', name: 'Instagram', icon: '📷', description: 'Social media platform' },
+        { packageName: 'com.snapchat.android', name: 'Snapchat', icon: '👻', description: 'Photo sharing app' },
+        { packageName: 'com.zhiliaoapp.musically', name: 'TikTok', icon: '🎵', description: 'Short video app' },
+        { packageName: 'com.twitter.android', name: 'Twitter', icon: '🐦', description: 'Microblogging platform' },
+        { packageName: 'com.reddit.frontpage', name: 'Reddit', icon: '🤖', description: 'Discussion platform' },
     ];
 
     const quickActions = [
@@ -16,74 +34,441 @@ const Home = () => {
         { title: 'Emergency Override', icon: '🚨', action: 'override' },
     ];
 
+    const checkUsagePermission = async () => {
+        try {
+            const hasPermission = await VPNModule.isUsageAccessGranted();
+            setHasUsagePermission(hasPermission);
+            return hasPermission;
+        } catch (error) {
+            console.error('Error checking usage permission:', error);
+            return false;
+        }
+    };
+
+    const requestUsagePermission = async () => {
+        try {
+            if (Platform.OS === 'android') {
+                await VPNModule.openUsageAccessSettings();
+                // Check again after user returns from settings
+                const hasPermission = await checkUsagePermission();
+                if (hasPermission) {
+                    loadScreenTimeStats();
+                }
+                return hasPermission;
+            }
+            return false;
+        } catch (error) {
+            console.error('Error requesting usage permission:', error);
+            return false;
+        }
+    };
+
+    const loadScreenTimeStats = async () => {
+        try {
+            const hasPermission = await checkUsagePermission();
+            if (!hasPermission) {
+                console.log('No usage access permission');
+                return;
+            }
+
+            setIsLoadingStats(true);
+            const stats = await VPNModule.getScreenTimeStats();
+            if (stats) {
+                setScreenTime(stats.totalScreenTime || 0);
+            }
+
+            // Load blocked apps usage
+            const blockedUsage = await VPNModule.getBlockedAppsUsageStats();
+            if (blockedUsage) {
+                setBlockedAppsUsage(blockedUsage);
+            }
+
+            // Load top apps usage
+            const endTime = Date.now();
+            const startTime = endTime - (24 * 60 * 60 * 1000); // Last 24 hours
+            const topApps = await VPNModule.getTopAppsByUsage(startTime, endTime, 5);
+            if (topApps) {
+                setTopAppsUsage(topApps);
+            }
+        } catch (error) {
+            console.error('Error loading screen time stats:', error);
+        } finally {
+            setIsLoadingStats(false);
+        }
+    };
+
+    useEffect(() => {
+        const initialize = async () => {
+            try {
+                // Load blocked apps from persistent storage
+                const savedBlockedApps = await new Promise((resolve, reject) => {
+                    SettingsModule.getBlockedApps((apps) => resolve(apps));
+                });
+                if (savedBlockedApps) {
+                    setBlockedApps(new Set(savedBlockedApps));
+                }
+        
+                // Load installed apps and screen time stats
+                await Promise.all([
+                    loadInstalledApps(),
+                    loadScreenTimeStats()
+                ]);
+            } catch (error) {
+                console.error('Failed to initialize:', error);
+            }
+        };
+
+        initialize();
+
+        // Set up event listeners
+        const detectionListener = appBlockerEmitter.addListener(
+            'onAppDetected',
+            (event) => {
+                console.log('App detected event received:', event);
+                if (event && event.packageName) {
+                    addDetectedApp(event);
+                }
+            }
+        );
+
+        const blockedListener = appBlockerEmitter.addListener(
+            'onBlockedAppOpened',
+            (event) => {
+                console.log('Blocked app opened:', event);
+            }
+        );
+
+        // Monitor app state changes
+        const appStateListener = AppState.addEventListener('change', (nextAppState) => {
+            setAppState(prevState => {
+                if (prevState.match(/inactive|background/) && nextAppState === 'active' && isMonitoring) {
+                    console.log('Restarting monitoring after app resume');
+                    restartMonitoring();
+                }
+                return nextAppState;
+            });
+        });
+
+        return () => {
+            detectionListener.remove();
+            blockedListener.remove();
+            appStateListener?.remove();
+        };
+    }, []);
+
+    const restartMonitoring = async () => {
+        try {
+            await VPNModule.stopMonitoring();
+            setTimeout(async () => {
+                await VPNModule.startMonitoring();
+                console.log('Monitoring restarted successfully');
+            }, 1000);
+        } catch (error) {
+            console.error('Failed to restart monitoring:', error);
+        }
+    };
+
+    const loadInstalledApps = async () => {
+        try {
+            const apps = await VPNModule.getInstalledApps();
+            setInstalledApps(apps);
+        } catch (error) {
+            console.error('Failed to load apps:', error);
+            Alert.alert('Error', 'Failed to load installed apps');
+        }
+    };
+
+    const checkPermissionsAndStart = async () => {
+        const perms = await VPNModule.checkPermissions();
+        if (!perms.usage) {
+            await VPNModule.requestPermissions();
+            return;
+        }
+        if (!perms.overlay) {
+            await VPNModule.requestOverlayPermission();
+            return;
+        }
+        await startMonitoringAfterPermissions();
+    };
+
+    const startMonitoringAfterPermissions = async () => {
+        try {
+            if (blockedApps.size > 0) {
+                await VPNModule.setBlockedApps(Array.from(blockedApps));
+            }
+            
+            await VPNModule.startMonitoring();
+            setIsMonitoring(true);
+        } catch (error) {
+            console.error('Failed to start monitoring:', error);
+            Alert.alert('Error', 'Failed to start monitoring: ' + error.message);
+        }
+    };
+
+    const stopMonitoring = async () => {
+        try {
+            await VPNModule.stopMonitoring();
+            setIsMonitoring(false);
+            console.log("Monitoring stopped successfully");
+        } catch (error) {
+            console.error("Failed to stop monitoring:", error);
+            Alert.alert("Error", "Failed to stop monitoring: " + error.message);
+        }
+    };
+
+    const toggleAppBlock = async (packageName) => {
+        const newBlockedApps = new Set(blockedApps);
+        if (newBlockedApps.has(packageName)) {
+            newBlockedApps.delete(packageName);
+        } else {
+            newBlockedApps.add(packageName);
+        }
+        setBlockedApps(newBlockedApps);
+
+        SettingsModule.saveBlockedApps(Array.from(newBlockedApps));
+
+        try {
+            await VPNModule.setBlockedApps(Array.from(newBlockedApps));
+        } catch (error) {
+            console.error('Failed to update blocked apps:', error);
+        }
+    };
+
+    const addDetectedApp = (appInfo) => {
+        setDetectedApps((prev) => {
+            const newList = [appInfo, ...prev.slice(0, 9)];
+            return newList;
+        });
+    };
+
+    const filteredApps = installedApps.filter((app) =>
+        app.appName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        app.packageName.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
+    const renderAppItem = ({ item }) => (
+        <View style={styles.appItem}>
+            <View style={styles.appInfo}>
+                <Text style={styles.appName}>{item.appName}</Text>
+                <Text style={styles.packageName}>{item.packageName}</Text>
+            </View>
+            <Switch
+                value={blockedApps.has(item.packageName)}
+                onValueChange={() => toggleAppBlock(item.packageName)}
+                trackColor={{ false: '#3A3F3E', true: '#A8C5F0' }}
+                thumbColor={blockedApps.has(item.packageName) ? '#DDE8F9' : '#9CA3AF'}
+            />
+        </View>
+    );
+
+    const formatScreenTime = (minutes) => {
+        if (!minutes) return '0m';
+        const hours = Math.floor(minutes / 60);
+        const mins = minutes % 60;
+        return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+    };
+
+    const renderScreenTimeCard = () => (
+        <View style={styles.card}>
+            <View style={styles.cardHeader}>
+                <Text style={styles.cardTitle}>📱 Screen Time</Text>
+                {!hasUsagePermission && (
+                    <TouchableOpacity 
+                        onPress={requestUsagePermission}
+                        style={styles.grantButton}
+                    >
+                        <Text style={styles.grantButtonText}>Grant Access</Text>
+                    </TouchableOpacity>
+                )}
+            </View>
+            
+            {hasUsagePermission ? (
+                <View style={styles.screenTimeContent}>
+                    <Text style={styles.screenTimeText}>
+                        {formatScreenTime(screenTime)} today
+                    </Text>
+                    <Text style={styles.screenTimeSubtext}>
+                        {blockedAppsUsage.length > 0 
+                            ? `${blockedAppsUsage.length} blocked apps used`
+                            : 'No blocked apps used today'}
+                    </Text>
+                </View>
+            ) : (
+                <Text style={styles.permissionText}>
+                    Grant usage access to track your screen time and app usage.
+                </Text>
+            )}
+        </View>
+    );
+
     return (
         <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-            {/* Header */}
-            <View style={styles.header}>
-                <Text style={styles.title}>Focus Dashboard</Text>
+            <View style={styles.container}> 
+                <Text style={styles.header}>DoomScroll Stopper</Text>
+                {renderScreenTimeCard()}
                 <Text style={styles.subtitle}>Stay productive, stay focused</Text>
-            </View>
 
-            {/* Daily Overview Card */}
-            <View style={styles.overviewCard}>
-                <View style={styles.overviewHeader}>
-                    <Text style={styles.overviewIcon}>⏰</Text>
-                    <Text style={styles.overviewTitle}>Daily Overview</Text>
+                {/* Daily Overview Card */}
+                <View style={styles.overviewCard}>
+                    <View style={styles.overviewHeader}>
+                        <Text style={styles.overviewIcon}>⏰</Text>
+                        <Text style={styles.overviewTitle}>Daily Overview</Text>
+                    </View>
+                    <View style={styles.overviewStats}>
+                        <View style={styles.statItem}>
+                            <Text style={styles.statNumber}>{blockedApps.size}</Text>
+                            <Text style={styles.statLabel}>Apps Blocked</Text>
+                        </View>
+                        <View style={styles.statItem}>
+                            <Text style={styles.statNumber}>2h 15m</Text>
+                            <Text style={styles.statLabel}>Focus Time</Text>
+                        </View>
+                        <View style={styles.statItem}>
+                            <Text style={styles.statNumber}>{detectedApps.length}</Text>
+                            <Text style={styles.statLabel}>Interruptions</Text>
+                        </View>
+                    </View>
                 </View>
-                <View style={styles.overviewStats}>
-                    <View style={styles.statItem}>
-                        <Text style={styles.statNumber}>3</Text>
-                        <Text style={styles.statLabel}>Apps Blocked</Text>
-                    </View>
-                    <View style={styles.statItem}>
-                        <Text style={styles.statNumber}>2h 15m</Text>
-                        <Text style={styles.statLabel}>Focus Time</Text>
-                    </View>
-                    <View style={styles.statItem}>
-                        <Text style={styles.statNumber}>8</Text>
-                        <Text style={styles.statLabel}>Interruptions</Text>
-                    </View>
-                </View>
-            </View>
 
-            {/* Blocked Apps List */}
+                {/* Monitoring Control Section */}
+                <View style={styles.controlSection}>
+                    <View style={styles.controlHeader}>
+                        <Text style={styles.controlTitle}>VPN Monitoring</Text>
+                    <View style={styles.controlToggle}>
+                        <Text style={styles.controlLabel}>
+                            {isMonitoring ? 'Active' : 'Inactive'}
+                        </Text>
+                        <Switch
+                            value={isMonitoring}
+                            onValueChange={(value) => {
+                                if (value) {
+                                    checkPermissionsAndStart();
+                                } else {
+                                    stopMonitoring();
+                                }
+                            }}
+                            trackColor={{ false: '#3A3F3E', true: '#A8C5F0' }}
+                            thumbColor={isMonitoring ? '#DDE8F9' : '#9CA3AF'}
+                        />
+                    </View>
+                </View>
+                
+                {isMonitoring && (
+                    <View style={styles.statusBox}>
+                        <View style={styles.statusHeader}>
+                            <Text style={styles.statusIcon}>✅</Text>
+                            <Text style={styles.statusText}>Monitoring Active</Text>
+                        </View>
+                        <View style={styles.statusDetails}>
+                            <View style={styles.statusDetail}>
+                                <Text style={styles.statusDetailIcon}>🚫</Text>
+                                <Text style={styles.statusDetailText}>
+                                    {blockedApps.size} apps blocked
+                                </Text>
+                            </View>
+                            <View style={styles.statusDetail}>
+                                <Text style={styles.statusDetailIcon}>⏱️</Text>
+                                <Text style={styles.statusDetailText}>
+                                    15-second delay screen
+                                </Text>
+                            </View>
+                        </View>
+                    </View>
+                )}
+                </View>
+           </View>
+
+            {/* Preset App Selection */}
             <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Currently Blocked</Text>
-                <View style={styles.appsContainer}>
-                    {blockedApps.map((app, index) => (
-                        <View key={index} style={[
-                            styles.appChip,
-                            app.blocked && styles.blockedAppChip
-                        ]}>
-                            <Text style={styles.appIcon}>{app.icon}</Text>
+                <Text style={styles.sectionTitle}>Quick Block Apps</Text>
+                <Text style={styles.sectionSubtitle}>
+                    Common apps that users often want to block
+                </Text>
+                <ScrollView 
+                    horizontal 
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.presetAppsContainer}
+                >
+                    {presetApps.map((app) => (
+                        <TouchableOpacity
+                            key={app.packageName}
+                            style={[
+                                styles.presetAppCard,
+                                blockedApps.has(app.packageName) && styles.blockedPresetApp
+                            ]}
+                            onPress={() => {
+                                toggleAppBlock(app.packageName)
+                                console.log(app.packageName)
+                                console.log(blockedApps)
+                                console.log(blockedApps.has(app.packageName))
+                            
+                            }}
+                        >
+                            <View style={styles.presetAppIcon}>
+                                <Text style={styles.presetAppIconText}>{app.icon}</Text>
+                            </View>
                             <Text style={[
-                                styles.appName,
-                                app.blocked && styles.blockedAppName
+                                styles.presetAppName,
+                                blockedApps.has(app.packageName) && styles.blockedPresetAppName
                             ]}>
                                 {app.name}
                             </Text>
-                            {app.blocked && (
-                                <Text style={styles.blockedBadge}>🚫</Text>
-                            )}
-                        </View>
+                            <View style={[
+                                styles.presetAppStatus,
+                                blockedApps.has(app.packageName) && styles.blockedPresetAppStatus
+                            ]}>
+                                <Text style={styles.presetAppStatusText}>
+                                    {blockedApps.has(app.packageName) ? '🚫' : '✅'}
+                                </Text>
+                            </View>
+                        </TouchableOpacity>
                     ))}
-                </View>
+                </ScrollView>
             </View>
 
-            {/* Delay Settings Preview */}
+            {/* Search and Add Apps */}
             <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Current Delay Settings</Text>
-                <View style={styles.delayCard}>
-                    <View style={styles.delayInfo}>
-                        <Text style={styles.delayIcon}>⏱️</Text>
-                        <View style={styles.delayText}>
-                            <Text style={styles.delayTitle}>Delay Time</Text>
-                            <Text style={styles.delayValue}>15 seconds</Text>
+                <Text style={styles.sectionTitle}>Add More Apps</Text>
+                <Text style={styles.sectionSubtitle}>
+                    Search for additional apps to block
+                </Text>
+                
+                <View style={styles.searchContainer}>
+                    <Text style={styles.searchIcon}>🔍</Text>
+                    <TextInput
+                        style={styles.searchInput}
+                        placeholder="Search for apps to block..."
+                        value={searchQuery}
+                        onChangeText={setSearchQuery}
+                        placeholderTextColor="#9CA3AF"
+                    />
+                </View>
+                
+                <View style={styles.appsList}>
+                    {searchQuery.length > 0 && filteredApps.length > 0 ? (
+                        <FlatList
+                            data={filteredApps.slice(0, 10)}
+                            renderItem={renderAppItem}
+                            keyExtractor={(item) => item.packageName}
+                            style={styles.flatList}
+                            nestedScrollEnabled={true}
+                            showsVerticalScrollIndicator={false}
+                        />
+                    ) : searchQuery.length > 0 && filteredApps.length === 0 ? (
+                        <View style={styles.emptyState}>
+                            <Text style={styles.emptyIcon}>🔍</Text>
+                            <Text style={styles.emptyText}>
+                                No apps found matching "{searchQuery}"
+                            </Text>
                         </View>
-                    </View>
-                    <TouchableOpacity style={styles.adjustButton}>
-                        <Text style={styles.adjustButtonText}>Adjust</Text>
-                    </TouchableOpacity>
+                    ) : (
+                        <View style={styles.emptyState}>
+                            <Text style={styles.emptyIcon}>💡</Text>
+                            <Text style={styles.emptyText}>
+                                Start typing to search for apps to block
+                            </Text>
+                        </View>
+                    )}
                 </View>
             </View>
 
@@ -99,181 +484,77 @@ const Home = () => {
                     ))}
                 </View>
             </View>
+
+            {/* Screen Time Statistics */}
+            <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                    <Text style={styles.sectionTitle}>Screen Time Statistics</Text>
+                    <TouchableOpacity 
+                        style={styles.refreshButton}
+                        onPress={loadScreenTimeStats}
+                        disabled={isLoadingStats}
+                    >
+                        <Text style={styles.refreshButtonText}>
+                            {isLoadingStats ? '🔄' : '🔄'}
+                        </Text>
+                    </TouchableOpacity>
+                </View>
+                
+                {/* Today's Total Screen Time */}
+                <View style={styles.screenTimeCard}>
+                    <Text style={styles.screenTimeTitle}>Today's Total Screen Time</Text>
+                    <Text style={styles.screenTimeValue}>
+                        {formatScreenTime(todayScreenTime)}
+                    </Text>
+                </View>
+
+                {/* Blocked Apps Usage */}
+                {blockedAppsUsage.length > 0 && (
+                    <View style={styles.usageSection}>
+                        <Text style={styles.usageSectionTitle}>Blocked Apps Usage (Today)</Text>
+                        {blockedAppsUsage.map((app, index) => (
+                            <View key={index} style={styles.usageItem}>
+                                <Text style={styles.usageAppName}>{app.appName}</Text>
+                                <Text style={styles.usageTime}>
+                                    {formatScreenTime(app.usageTime)}
+                                </Text>
+                            </View>
+                        ))}
+                    </View>
+                )}
+
+                {/* Top Apps by Usage */}
+                {topAppsUsage.length > 0 && (
+                    <View style={styles.usageSection}>
+                        <Text style={styles.usageSectionTitle}>Top Apps by Usage (24h)</Text>
+                        {topAppsUsage.slice(0, 5).map((app, index) => (
+                            <View key={index} style={styles.usageItem}>
+                                <View style={styles.usageAppInfo}>
+                                    <Text style={styles.usageAppName}>{app.appName}</Text>
+                                    <Text style={styles.usagePackageName}>{app.packageName}</Text>
+                                </View>
+                                <Text style={styles.usageTime}>
+                                    {formatScreenTime(app.usageTime)}
+                                </Text>
+                            </View>
+                        ))}
+                    </View>
+                )}
+
+                {!isLoadingStats && blockedAppsUsage.length === 0 && topAppsUsage.length === 0 && (
+                    <View style={styles.emptyState}>
+                        <Text style={styles.emptyIcon}>📱</Text>
+                        <Text style={styles.emptyText}>
+                            No usage statistics available yet
+                        </Text>
+                        <Text style={styles.emptySubtext}>
+                            Make sure you have granted usage access permissions
+                        </Text>
+                    </View>
+                )}
+            </View>
         </ScrollView>
     );
 };
-
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#1D201F',
-        paddingHorizontal: 16,
-    },
-    header: {
-        paddingTop: 24,
-        paddingBottom: 32,
-    },
-    title: {
-        fontSize: 28,
-        fontWeight: '700',
-        color: '#DDE8F9',
-        marginBottom: 8,
-    },
-    subtitle: {
-        fontSize: 16,
-        color: '#9CA3AF',
-    },
-    overviewCard: {
-        backgroundColor: '#2A2F2E',
-        borderRadius: 20,
-        padding: 24,
-        marginBottom: 32,
-        borderWidth: 1,
-        borderColor: '#3A3F3E',
-    },
-    overviewHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 20,
-    },
-    overviewIcon: {
-        fontSize: 24,
-        marginRight: 12,
-    },
-    overviewTitle: {
-        fontSize: 20,
-        fontWeight: '600',
-        color: '#DDE8F9',
-    },
-    overviewStats: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-    },
-    statItem: {
-        alignItems: 'center',
-        flex: 1,
-    },
-    statNumber: {
-        fontSize: 24,
-        fontWeight: '700',
-        color: '#A8C5F0',
-        marginBottom: 4,
-    },
-    statLabel: {
-        fontSize: 12,
-        color: '#9CA3AF',
-        textAlign: 'center',
-    },
-    section: {
-        marginBottom: 32,
-    },
-    sectionTitle: {
-        fontSize: 18,
-        fontWeight: '600',
-        color: '#DDE8F9',
-        marginBottom: 16,
-    },
-    appsContainer: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 12,
-    },
-    appChip: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#2A2F2E',
-        borderRadius: 20,
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderWidth: 1,
-        borderColor: '#3A3F3E',
-    },
-    blockedAppChip: {
-        backgroundColor: '#3A2F2E',
-        borderColor: '#A8C5F0',
-    },
-    appIcon: {
-        fontSize: 16,
-        marginRight: 8,
-    },
-    appName: {
-        fontSize: 14,
-        fontWeight: '500',
-        color: '#9CA3AF',
-    },
-    blockedAppName: {
-        color: '#DDE8F9',
-    },
-    blockedBadge: {
-        fontSize: 12,
-        marginLeft: 8,
-    },
-    delayCard: {
-        backgroundColor: '#2A2F2E',
-        borderRadius: 16,
-        padding: 20,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        borderWidth: 1,
-        borderColor: '#3A3F3E',
-    },
-    delayInfo: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        flex: 1,
-    },
-    delayIcon: {
-        fontSize: 24,
-        marginRight: 16,
-    },
-    delayText: {
-        flex: 1,
-    },
-    delayTitle: {
-        fontSize: 14,
-        color: '#9CA3AF',
-        marginBottom: 4,
-    },
-    delayValue: {
-        fontSize: 18,
-        fontWeight: '600',
-        color: '#DDE8F9',
-    },
-    adjustButton: {
-        backgroundColor: '#A8C5F0',
-        borderRadius: 12,
-        paddingHorizontal: 20,
-        paddingVertical: 10,
-    },
-    adjustButtonText: {
-        color: '#1D201F',
-        fontSize: 14,
-        fontWeight: '600',
-    },
-    actionsContainer: {
-        flexDirection: 'row',
-        gap: 12,
-    },
-    actionCard: {
-        backgroundColor: '#2A2F2E',
-        borderRadius: 16,
-        padding: 20,
-        alignItems: 'center',
-        flex: 1,
-        borderWidth: 1,
-        borderColor: '#3A3F3E',
-    },
-    actionIcon: {
-        fontSize: 32,
-        marginBottom: 12,
-    },
-    actionTitle: {
-        fontSize: 14,
-        fontWeight: '500',
-        color: '#DDE8F9',
-        textAlign: 'center',
-    },
-});
 
 export default Home;

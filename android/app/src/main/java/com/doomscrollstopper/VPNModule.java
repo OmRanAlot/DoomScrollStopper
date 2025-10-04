@@ -26,6 +26,13 @@ import android.os.Build;
 import android.util.Log;
 import android.app.AppOpsManager;
 import android.content.pm.ApplicationInfo;
+import android.app.usage.UsageStatsManager;
+import android.content.Intent;
+import android.provider.Settings;
+import java.util.Map;
+import java.util.HashMap;
+import android.content.pm.PackageManager;
+
 //This module doesn't send any packet or traffic data back to React Native.
 //It's just a "control switch" — start/stop the VPN.
 // Just turns the VPN on or off from react native code
@@ -34,11 +41,13 @@ public class VPNModule extends ReactContextBaseJavaModule {
     private static final String MODULE_NAME = "VPNModule";
     private ReactApplicationContext reactContext;
     private AppUsageMonitor appMonitor;
+    private ScreenTimeTracker screenTimeTracker;
     
     public VPNModule(ReactApplicationContext reactContext) {
         super(reactContext);
         this.reactContext = reactContext;
         this.appMonitor = new AppUsageMonitor(reactContext);
+        this.screenTimeTracker = new ScreenTimeTracker(reactContext);
         
         // Set up listener
         appMonitor.setListener(new AppUsageMonitor.AppDetectionListener() {
@@ -53,12 +62,41 @@ public class VPNModule extends ReactContextBaseJavaModule {
             }
         });
     }
-    
+
     @Override
     public String getName() {
         return MODULE_NAME;
     }
-    
+
+    @Override
+    public Map<String, Object> getConstants() {
+        final Map<String, Object> constants = new HashMap<>();
+        constants.put("isScreenTimePermissionGranted", isUsageAccessGranted());
+        return constants;
+    }
+
+    private boolean isUsageAccessGranted() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            try {
+                PackageManager packageManager = reactContext.getPackageManager();
+                ApplicationInfo applicationInfo = packageManager.getApplicationInfo(reactContext.getPackageName(), 0);
+                AppOpsManager appOps = (AppOpsManager) reactContext.getSystemService(Context.APP_OPS_SERVICE);
+                int mode = appOps.checkOpNoThrow("android:get_usage_stats", applicationInfo.uid, applicationInfo.packageName);
+                return (mode == AppOpsManager.MODE_ALLOWED);
+            } catch (Exception e) {
+                return false;
+            }
+        }
+        return false;
+    }
+
+    @ReactMethod
+    public void openUsageAccessSettings() {
+        Intent intent = new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS);
+        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        reactContext.startActivity(intent);
+    }
+
     @ReactMethod
     public void startMonitoring(Promise promise) {
         Log.d("VPNModule", "startMonitoring called");
@@ -84,6 +122,25 @@ public class VPNModule extends ReactContextBaseJavaModule {
     }
     
     @ReactMethod
+    public void getScreenTimeStats(Promise promise) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
+                Map<String, Long> stats = screenTimeTracker.getScreenTimeStats();
+                WritableMap result = Arguments.createMap();
+                result.putDouble("totalScreenTime", stats.get("totalScreenTime"));
+                result.putDouble("startTime", stats.get("startTime"));
+                result.putDouble("endTime", stats.get("endTime"));
+                promise.resolve(result);
+            } else {
+                promise.reject("UNSUPPORTED", "Screen time tracking requires API level 22 or higher");
+            }
+        } catch (Exception e) {
+            Log.e("VPNModule", "Error getting screen time stats", e);
+            promise.reject("ERROR", "Failed to get screen time stats: " + e.getMessage());
+        }
+    }
+    
+    @ReactMethod
     public void stopMonitoring(Promise promise) {
         try {
             Log.d("VPNModule", "Stopping monitoring");
@@ -98,6 +155,106 @@ public class VPNModule extends ReactContextBaseJavaModule {
         } catch (Exception e) {
             Log.d("VPNModule", "stopMonitoring failed, rejecting promise");
             promise.reject("STOP_ERROR", e.getMessage());
+        }
+    }
+    
+    // New methods for getting app usage statistics
+    @ReactMethod
+    public void getAppUsageTime(String packageName, double startTime, double endTime, Promise promise) {
+        try {
+            long startTimeLong = (long) startTime;
+            long endTimeLong = (long) endTime;
+            long usageTime = appMonitor.getAppUsageTime(packageName, startTimeLong, endTimeLong);
+            promise.resolve(usageTime);
+        } catch (Exception e) {
+            Log.e("VPNModule", "Error getting app usage time", e);
+            promise.reject("USAGE_STATS_ERROR", e.getMessage());
+        }
+    }
+    
+    @ReactMethod
+    public void getTotalScreenTime(double startTime, double endTime, Promise promise) {
+        try {
+            long startTimeLong = (long) startTime;
+            long endTimeLong = (long) endTime;
+            long totalTime = appMonitor.getTotalScreenTime(startTimeLong, endTimeLong);
+            promise.resolve(totalTime);
+        } catch (Exception e) {
+            Log.e("VPNModule", "Error getting total screen time", e);
+            promise.reject("USAGE_STATS_ERROR", e.getMessage());
+        }
+    }
+    
+    @ReactMethod
+    public void getTodayScreenTime(Promise promise) {
+        try {
+            long todayTime = appMonitor.getTodayScreenTime();
+            promise.resolve(todayTime);
+        } catch (Exception e) {
+            Log.e("VPNModule", "Error getting today's screen time", e);
+            promise.reject("USAGE_STATS_ERROR", e.getMessage());
+        }
+    }
+    
+    @ReactMethod
+    public void getAppTodayUsageTime(String packageName, Promise promise) {
+        try {
+            long usageTime = appMonitor.getAppTodayUsageTime(packageName);
+            promise.resolve(usageTime);
+        } catch (Exception e) {
+            Log.e("VPNModule", "Error getting app's today usage time", e);
+            promise.reject("USAGE_STATS_ERROR", e.getMessage());
+        }
+    }
+    
+    @ReactMethod
+    public void getTopAppsByUsage(double startTime, double endTime, int limit, Promise promise) {
+        try {
+            long startTimeLong = (long) startTime;
+            long endTimeLong = (long) endTime;
+            List<AppUsageMonitor.AppUsageInfo> topApps = appMonitor.getTopAppsByUsage(startTimeLong, endTimeLong, limit);
+            
+            WritableArray appArray = Arguments.createArray();
+            for (AppUsageMonitor.AppUsageInfo appInfo : topApps) {
+                WritableMap appMap = Arguments.createMap();
+                appMap.putString("packageName", appInfo.packageName);
+                appMap.putString("appName", appInfo.appName);
+                appMap.putDouble("usageTime", appInfo.usageTime);
+                appArray.pushMap(appMap);
+            }
+            
+            promise.resolve(appArray);
+        } catch (Exception e) {
+            Log.e("VPNModule", "Error getting top apps by usage", e);
+            promise.reject("USAGE_STATS_ERROR", e.getMessage());
+        }
+    }
+    
+    @ReactMethod
+    public void getBlockedAppsUsageStats(Promise promise) {
+        try {
+            // Get usage stats for all blocked apps
+            Set<String> blockedApps = appMonitor.getBlockedApps();
+            WritableArray blockedAppsStats = Arguments.createArray();
+            
+            long endTime = System.currentTimeMillis();
+            long startTime = endTime - (24 * 60 * 60 * 1000); // Last 24 hours
+            
+            for (String packageName : blockedApps) {
+                long usageTime = appMonitor.getAppUsageTime(packageName, startTime, endTime);
+                if (usageTime > 0) {
+                    WritableMap appStats = Arguments.createMap();
+                    appStats.putString("packageName", packageName);
+                    appStats.putString("appName", appMonitor.getAppName(packageName));
+                    appStats.putDouble("usageTime", usageTime);
+                    blockedAppsStats.pushMap(appStats);
+                }
+            }
+            
+            promise.resolve(blockedAppsStats);
+        } catch (Exception e) {
+            Log.e("VPNModule", "Error getting blocked apps usage stats", e);
+            promise.reject("USAGE_STATS_ERROR", e.getMessage());
         }
     }
     

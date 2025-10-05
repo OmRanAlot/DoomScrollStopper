@@ -46,7 +46,7 @@ const App = () => {
                 iconText = focused ? '📊' : '📊';
               }
 
-              return <Text style={{ fontSize: 20, color: focused ? '#A8C5F0' : '#6B7280' }}>{iconText}</Text>;
+              return <Text style={{ fontSize: 20, color }}>{iconText}</Text>;
             },
           })}
         >

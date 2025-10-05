@@ -1,395 +1,182 @@
-import { StyleSheet } from 'react-native';
+import { StyleSheet, Platform } from 'react-native';
+// Import tokens; keep import JS-friendly
+const tokens = require('../../design/tokens').default;
+
+const { dark, spacing, radii, typography, colors, shadows } = tokens;
 
 const styles = StyleSheet.create({
-    // Main container styles
+    // Container
     container: {
         flex: 1,
-        backgroundColor: '#1D201F',
-        paddingHorizontal: 16,
+        backgroundColor: dark.background,
     },
-    header: {
-        paddingTop: 24,
-        paddingBottom: 32,
-    },
-    title: {
-        fontSize: 28,
-        fontWeight: '700',
-        color: '#DDE8F9',
-        marginBottom: 8,
-    },
-    subtitle: {
-        fontSize: 16,
-        color: '#9CA3AF',
-    },
-    actionCard: {
-        backgroundColor: '#2A2F2E',
-        borderRadius: 16,
-        padding: 20,
-        alignItems: 'center',
-        flex: 1,
-        borderWidth: 1,
-        borderColor: '#3A3F3E',
-    },
-    actionTitle: {
-        fontSize: 14,
-        fontWeight: '500',
-        color: '#DDE8F9',
-        textAlign: 'center',
-    },
-    
-    // Screen Time Card Styles
-    screenTimeCard: {
-        backgroundColor: '#2A2F2E',
-        borderRadius: 20,
-        padding: 20,
-        marginBottom: 20,
-        borderWidth: 1,
-        borderColor: '#3A3F3E',
-    },
-    screenTimeHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 16,
-    },
-    screenTimeTitle: {
-        fontSize: 18,
-        fontWeight: '600',
-        color: '#DDE8F9',
-    },
-    grantButton: {
-        backgroundColor: '#A8C5F0',
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderRadius: 12,
-    },
-    grantButtonText: {
-        color: '#1D201F',
-        fontWeight: '600',
-        fontSize: 14,
-    },
-    screenTimeContent: {
-        alignItems: 'center',
-        paddingVertical: 12,
-    },
-    screenTimeValue: {
-        fontSize: 36,
-        fontWeight: '700',
-        color: '#A8C5F0',
-        marginBottom: 4,
-    },
-    screenTimeSubtext: {
-        fontSize: 14,
-        color: '#9CA3AF',
-        marginBottom: 12,
-    },
-    permissionText: {
-        fontSize: 14,
-        color: '#9CA3AF',
-        textAlign: 'center',
-        lineHeight: 20,
-        marginBottom: 16,
-    },
-    usageSection: {
-        marginTop: 16,
-        backgroundColor: '#1D201F',
-        borderRadius: 12,
-        padding: 16,
-        borderWidth: 1,
-        borderColor: '#3A3F3E',
-    },
-    usageSectionTitle: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: '#DDE8F9',
-        marginBottom: 12,
-    },
-    usageItem: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingVertical: 12,
-        borderBottomWidth: 1,
-        borderBottomColor: '#3A3F3E',
-    },
-    usageAppName: {
-        fontSize: 14,
-        color: '#DDE8F9',
-    },
-    usageTime: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#A8C5F0',
-    },
-    refreshButton: {
-        padding: 8,
-        borderRadius: 20,
-        backgroundColor: '#3A3F3E',
-    },
-    refreshButtonText: {
-        fontSize: 18,
-    },
-    loadingContainer: {
-        padding: 16,
-        alignItems: 'center',
-    },
-    loadingText: {
-        color: '#9CA3AF',
-        marginTop: 8,
-    },
-    overviewCard: {
-        backgroundColor: '#2A2F2E',
-        borderRadius: 20,
-        padding: 24,
-        marginBottom: 24,
-        borderWidth: 1,
-        borderColor: '#3A3F3E',
-    },
-    overviewHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 20,
-    },
-    overviewIcon: {
-        fontSize: 24,
-        marginRight: 12,
-    },
-    overviewTitle: {
-        fontSize: 20,
-        fontWeight: '600',
-        color: '#DDE8F9',
-    },
-    overviewStats: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-    },
-    statItem: {
-        alignItems: 'center',
+
+    // App wrapper (inner content padding)
+    appWrapper: {
+        paddingHorizontal: spacing.md,
+        paddingTop: spacing.lg,
+        paddingBottom: spacing.xl,
+        backgroundColor: dark.background,
         flex: 1,
     },
-    statNumber: {
-        fontSize: 24,
+
+    // Top header (logo + title)
+    topHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: spacing.sm,
+    },
+    logo: {
+        fontSize: 42,
+        marginRight: spacing.md,
+        lineHeight: 42,
+    },
+    appTitle: {
+        fontSize: typography.h1.size,
+        lineHeight: typography.h1.lineHeight,
         fontWeight: '700',
-        color: '#A8C5F0',
-        marginBottom: 4,
+        color: dark.textPrimary,
+        ...(Platform.OS === 'ios' ? { fontFamily: typography.fontFamilyIOSDisplay } : { fontFamily: typography.fontFamilyAndroid }),
+    },
+
+    // Content stack
+    content: {
+        marginTop: spacing.sm,
+    },
+
+    // Large card used for stats and mood chart
+    cardLarge: {
+        backgroundColor: dark.surface,
+        borderRadius: radii.xxl,
+        padding: spacing.xl,
+        marginBottom: spacing.lg,
+        borderWidth: 1,
+        borderColor: dark.divider,
+        ...shadows.md,
+    },
+    cardTitle: {
+        fontSize: typography.h2.size,
+        fontWeight: '700',
+        color: dark.textPrimary,
+        marginBottom: spacing.sm,
+    },
+
+    // Stats layout
+    statsRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: spacing.md,
+    },
+    statCol: {
+        flex: 1,
+        paddingRight: spacing.md,
     },
     statLabel: {
-        fontSize: 12,
-        color: '#9CA3AF',
-        textAlign: 'center',
+        fontSize: typography.caption.size,
+        color: dark.textSecondary,
     },
-    controlSection: {
-        backgroundColor: '#2A2F2E',
-        borderRadius: 20,
-        padding: 24,
-        marginBottom: 24,
+    statValue: {
+        fontSize: 28,
+        fontWeight: '800',
+        color: colors.primary500,
+        marginTop: spacing.xs,
+    },
+
+    // Chart placeholder
+    chartPlaceholder: {
+        height: 140,
+        borderRadius: radii.md,
+        backgroundColor: dark.background,
         borderWidth: 1,
-        borderColor: '#3A3F3E',
+        borderColor: dark.divider,
     },
-    controlHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
+
+    // Small card
+    cardSmall: {
+        backgroundColor: dark.surface,
+        borderRadius: radii.lg,
+        padding: spacing.md,
+        marginBottom: spacing.md,
+        borderWidth: 1,
+        borderColor: dark.divider,
+    },
+    cardText: {
+        fontSize: typography.bodySmall.size,
+        color: dark.textSecondary,
+    },
+
+    // Footer call-to-action
+    footerButton: {
+        marginTop: spacing.lg,
+        backgroundColor: colors.primary500,
+        paddingVertical: spacing.md,
+        borderRadius: radii.xxl,
         alignItems: 'center',
-        marginBottom: 20,
     },
-    controlTitle: {
-        fontSize: 20,
-        fontWeight: '600',
-        color: '#DDE8F9',
+    footerText: {
+        color: dark.background,
+        fontSize: typography.body.size,
+        fontWeight: '700',
     },
-    controlToggle: {
-        flexDirection: 'row',
+
+    // Header bar (legacy small header)
+    headerBar: {
+        height: 50,
+        width: '100%',
+        backgroundColor: dark.surface,
+        marginHorizontal: 0,
+        paddingHorizontal: 0,
+        borderRadius: 0,
         alignItems: 'center',
-        gap: 12,
+        justifyContent: 'center',
+        marginBottom: spacing.sm,
     },
-    controlLabel: {
-        fontSize: 16,
+    headerBarText: {
+        fontSize: typography.body.size,
+        color: dark.textSecondary,
         fontWeight: '500',
-        color: '#9CA3AF',
     },
-    statusBox: {
-        backgroundColor: '#1D201F',
-        borderRadius: 16,
-        padding: 20,
-        borderWidth: 1,
-        borderColor: '#A8C5F0',
-    },
-    statusHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 16,
-    },
-    statusIcon: {
-        fontSize: 24,
-        marginRight: 12,
-    },
-    statusText: {
-        fontSize: 18,
-        fontWeight: '600',
-        color: '#A8C5F0',
-    },
-    statusDetails: {
-        gap: 12,
-    },
-    statusDetail: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    statusDetailIcon: {
-        fontSize: 16,
-        marginRight: 8,
-    },
-    statusDetailText: {
-        fontSize: 14,
-        color: '#DDE8F9',
-    },
+
+    // Reusable components and fallbacks (kept from previous styles)
     section: {
-        marginBottom: 24,
+        marginBottom: spacing.xl,
     },
     sectionTitle: {
-        fontSize: 20,
+        fontSize: typography.h3.size,
         fontWeight: '600',
-        color: '#DDE8F9',
-        marginBottom: 8,
+        color: dark.textPrimary,
+        marginBottom: spacing.sm,
     },
     sectionSubtitle: {
-        fontSize: 14,
-        color: '#9CA3AF',
-        marginBottom: 20,
+        fontSize: typography.bodySmall.size,
+        color: dark.textSecondary,
+        marginBottom: spacing.lg,
     },
-    presetAppsContainer: {
-        paddingHorizontal: 4,
-    },
-    presetAppCard: {
-        alignItems: 'center',
-        backgroundColor: '#2A2F2E',
-        borderRadius: 16,
-        padding: 16,
-        borderWidth: 2,
-        borderColor: 'transparent',
-        marginHorizontal: 6,
-        minWidth: 100,
-        maxWidth: 120,
-    },
-    blockedPresetApp: {
-        borderColor: '#A8C5F0',
-        backgroundColor: '#1D201F',
-    },
-    presetAppIcon: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: '#3A3F3E',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 8,
-    },
-    presetAppIconText: {
-        fontSize: 20,
-    },
-    presetAppName: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#DDE8F9',
-        marginBottom: 8,
-        textAlign: 'center',
-    },
-    blockedPresetAppName: {
-        color: '#A8C5F0',
-    },
-    presetAppStatus: {
-        width: 28,
-        height: 28,
-        borderRadius: 14,
-        backgroundColor: '#3A3F3E',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    blockedPresetAppStatus: {
-        backgroundColor: '#A8C5F0',
-    },
-    presetAppStatusText: {
-        fontSize: 14,
-    },
-    searchContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#1D201F',
-        borderRadius: 12,
-        paddingHorizontal: 16,
-        marginBottom: 20,
-        borderWidth: 1,
-        borderColor: '#3A3F3E',
-    },
-    searchIcon: {
-        fontSize: 18,
-        marginRight: 12,
-        color: '#9CA3AF',
-    },
-    searchInput: {
-        flex: 1,
-        fontSize: 16,
-        color: '#DDE8F9',
-        paddingVertical: 16,
-    },
-    appsList: {
-        maxHeight: 300,
-    },
-    flatList: {
-        maxHeight: 250,
-    },
+
+    // Simple list/item styles reused elsewhere
     appItem: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingVertical: 16,
-        paddingHorizontal: 16,
-        backgroundColor: '#2A2F2E',
-        borderRadius: 12,
-        marginBottom: 8,
+        paddingVertical: spacing.md,
+        paddingHorizontal: spacing.md,
+        backgroundColor: dark.surface,
+        borderRadius: radii.md,
+        marginBottom: spacing.sm,
         borderWidth: 1,
-        borderColor: '#3A3F3E',
+        borderColor: dark.divider,
     },
-    appInfo: {
-        flex: 1,
-    },
+    appInfo: { flex: 1 },
     appName: {
-        fontSize: 16,
+        fontSize: typography.body.size,
         fontWeight: '500',
-        color: '#DDE8F9',
-        marginBottom: 4,
+        color: dark.textPrimary,
+        marginBottom: spacing.xs,
     },
     packageName: {
-        fontSize: 12,
-        color: '#9CA3AF',
-    },
-    emptyState: {
-        alignItems: 'center',
-        paddingVertical: 32,
-        backgroundColor: '#2A2F2E',
-        borderRadius: 16,
-        borderWidth: 1,
-        borderColor: '#3A3F3E',
-    },
-    emptyIcon: {
-        fontSize: 48,
-        marginBottom: 16,
-        opacity: 0.5,
-    },
-    emptyText: {
-        color: '#9CA3AF',
-        fontSize: 14,
-        textAlign: 'center',
-        lineHeight: 20,
-        maxWidth: 250,
-    },
-    actionsContainer: {
-        flexDirection: 'row',
-        gap: 12,
-    },
-    actionCard: {
-        backgroundColor: '#2A2F2E',
-        borderRadius: 16,
+        fontSize: typography.caption.size,
+        color: dark.textSecondary,
     },
 });
+
 export default styles;

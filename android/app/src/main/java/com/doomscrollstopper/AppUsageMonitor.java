@@ -1,6 +1,7 @@
 package com.doomscrollstopper;
 
 import android.app.usage.UsageStats;
+import android.app.usage.UsageEvents;
 import android.app.usage.UsageStatsManager;
 import android.content.Context;
 import android.content.Intent;
@@ -62,6 +63,9 @@ public class AppUsageMonitor {
     private String lastAppPackage = "";
     private String currentForegroundApp = "";
     private Set<String> allowedThisSession = new HashSet<>();
+    // Cooldown tracking to prevent immediate re-triggers after dismissal or allow
+    private final Map<String, Long> popupCooldown = new ConcurrentHashMap<>();
+    private static final long POPUP_COOLDOWN_MS = 1000; // 1s cooldown to avoid rapid re-triggers after Continue
 
     public interface AppDetectionListener {
         void onAppDetected(String packageName, String appName);
@@ -92,6 +96,7 @@ public class AppUsageMonitor {
             }
             
             loadBlockedAppsFromPrefs();
+            Log.d(TAG, "Loaded blocked apps count=" + (blockedApps != null ? blockedApps.size() : 0));
             isMonitoring = true;
 
             new Thread(() -> {
@@ -116,15 +121,28 @@ public class AppUsageMonitor {
             public void run() {
                 try{
                     String foregroundApp = getCurrentForegroundApp();
+                    if (foregroundApp == null) {
+                        Log.d(TAG, "Foreground app is null; skipping this tick");
+                    }
         
                     if (foregroundApp != null && !foregroundApp.equals(context.getPackageName())) {
                         String appName = getAppName(foregroundApp);
+                        boolean isBlocked = blockedApps.contains(foregroundApp);
+                        boolean isAllowed = allowedThisSession.contains(foregroundApp);
+                        Long lastShown = popupCooldown.get(foregroundApp);
+                        long now = System.currentTimeMillis();
+                        long remainingCooldown = (lastShown == null) ? 0 : Math.max(0, POPUP_COOLDOWN_MS - (now - lastShown));
+                        Log.d(TAG, "Tick fgApp=" + foregroundApp + " blocked=" + isBlocked + " allowedThisSession=" + isAllowed + " overlayActive=" + isOverlayActive + " cooldownRemainingMs=" + remainingCooldown);
         
                         // Always trigger block if app is in blocked list
-                        if (blockedApps.contains(foregroundApp) && !isOverlayActive 
-                            && !allowedThisSession.contains(foregroundApp)) {
+                        if (isBlocked && !isOverlayActive && !isAllowed) {
+                            // Respect cooldown per app to prevent rapid re-triggers
+                            if (lastShown != null && (now - lastShown) < POPUP_COOLDOWN_MS) {
+                                Log.d(TAG, "Cooldown active for " + foregroundApp + ", skipping overlay");
+                            } else {
                             Log.d("AppMonitor", "Blocked app detected: " + appName);
                             handleBlockedApp(foregroundApp, appName);
+                            }
                         }
 
                         // If user switches away from an allowed app, remove it from allowed session
@@ -153,27 +171,52 @@ public class AppUsageMonitor {
     }
     
     private String getCurrentForegroundApp() {
-        try{
-            long currentTime = System.currentTimeMillis();
+        // Prefer UsageEvents for higher fidelity foreground detection
+        try {
+            long endTime = System.currentTimeMillis();
+            long startTime = endTime - 60000; // look back 60 seconds to capture last foreground event
+
+            UsageEvents events = usageStatsManager.queryEvents(startTime, endTime);
+            UsageEvents.Event event = new UsageEvents.Event();
+            String lastForeground = null;
+            long lastTs = 0;
+
+            while (events != null && events.hasNextEvent()) {
+                events.getNextEvent(event);
+                int type = event.getEventType();
+                long ts = event.getTimeStamp();
+                if (ts >= lastTs) {
+                    if (type == UsageEvents.Event.MOVE_TO_FOREGROUND || type == UsageEvents.Event.ACTIVITY_RESUMED) {
+                        lastForeground = event.getPackageName();
+                        lastTs = ts;
+                    }
+                }
+            }
+
+            if (lastForeground != null) {
+                Log.d(TAG, "UsageEvents detected foreground: " + lastForeground + " at ts=" + lastTs);
+                return lastForeground;
+            }
+
+            // Fallback to aggregated UsageStats if no events found
             List<UsageStats> stats = usageStatsManager.queryUsageStats(
-                UsageStatsManager.INTERVAL_DAILY, 
-                currentTime - 1000 * 60, // Last minute
-                currentTime
+                UsageStatsManager.INTERVAL_DAILY,
+                endTime - 1000 * 60,
+                endTime
             );
-            
             if (stats != null && !stats.isEmpty()) {
                 SortedMap<Long, UsageStats> sortedMap = new TreeMap<>();
                 for (UsageStats usageStats : stats) {
                     sortedMap.put(usageStats.getLastTimeUsed(), usageStats);
                 }
-                
                 if (!sortedMap.isEmpty()) {
-                    return sortedMap.get(sortedMap.lastKey()).getPackageName();
+                    String pkg = sortedMap.get(sortedMap.lastKey()).getPackageName();
+                    Log.d(TAG, "Fallback UsageStats foreground: " + pkg);
+                    return pkg;
                 }
             }
-        } catch (Exception e){
+        } catch (Exception e) {
             Log.e(TAG, "Error getting current foreground app", e);
-
         }
         return null;
     }
@@ -232,15 +275,20 @@ public class AppUsageMonitor {
             startCountdown(countdownText, continueButton, 15);
             
             continueButton.setOnClickListener(v -> {
+                // Allow this app for the rest of the current session
+                allowedThisSession.add(packageName);
+                // Stamp cooldown to avoid rapid re-triggers
+                popupCooldown.put(packageName, System.currentTimeMillis());
                 removeOverlay();
                 // App continues to open
             });
             
             backButton.setOnClickListener(v -> {
-                removeOverlay();
-
                 // Don't add to allowed session when going back to home
                 allowedThisSession.remove(packageName);
+                // Intentionally NO cooldown on Back; we want immediate overlay on reopen
+                Log.d(TAG, "Back pressed: no cooldown; will show immediately on next open for " + packageName);
+                removeOverlay();
 
                 // Return to home screen
                 Intent homeIntent = new Intent(Intent.ACTION_MAIN);
@@ -281,13 +329,6 @@ public class AppUsageMonitor {
         }
         isOverlayActive = false;
         lastAppPackage = "";
-
-        // Add the current app to allowed session when user clicks "continue"
-        String currentApp = getCurrentForegroundApp();
-        if (currentApp != null && blockedApps.contains(currentApp)) {
-            allowedThisSession.add(currentApp);
-        }   
-
     }
 
     public String getAppName(String packageName) {

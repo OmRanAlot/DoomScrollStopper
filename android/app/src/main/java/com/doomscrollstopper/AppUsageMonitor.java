@@ -31,7 +31,21 @@ import java.util.ArrayList;
 import java.util.Map;
 import java.util.HashMap;
 
-//MAIN APP MONITOR LOGIC
+/*
+ * AppUsageMonitor
+ * ----------------
+ * Core detection loop for foreground app usage and overlay intervention.
+ * Responsibilities:
+ *  - Poll UsageStats for current foreground app at 1s interval (battery-aware)
+ *  - Show delay overlay for apps in the blocked list, unless explicitly allowed this session
+ *  - Maintain a lightweight in-memory session allowlist (`allowedThisSession`)
+ *  - Persist blocked apps in SharedPreferences (doomscroll_prefs)
+ *
+ * Notes on Performance & Battery:
+ *  - Polling is kept at 1000ms to balance responsiveness and battery usage.
+ *  - Handler bound to main Looper schedules the runnable only while `isMonitoring` is true.
+ *  - Overlay operations run on UI thread; avoid heavy work inside callbacks.
+ */
 
 public class AppUsageMonitor {
     private static final String TAG = "AppUsageMonitor";
@@ -95,7 +109,7 @@ public class AppUsageMonitor {
     }
 
     private void monitorApps() {
-        Handler handler = new Handler(Looper.getMainLooper());
+        // Use the class-level handler to avoid redundant instances and reduce GC pressure.
         
         Runnable runnable = new Runnable() {
             @Override
@@ -183,6 +197,8 @@ public class AppUsageMonitor {
         isOverlayActive = true;
 
         handler.post(() -> {
+            // POPUP_MARKER: native overlay popup entry point (searchable)
+            Log.i(TAG, "POPUP_MARKER showing delay overlay for " + appName + " (" + packageName + ")");
             if (overlayView != null) {
                 windowManager.removeView(overlayView);
             }
@@ -212,7 +228,7 @@ public class AppUsageMonitor {
             params.gravity = Gravity.CENTER;
             windowManager.addView(overlayView, params);
             
-            // Start countdown
+            // Start countdown; during this period the user cannot immediately continue.
             startCountdown(countdownText, continueButton, 15);
             
             continueButton.setOnClickListener(v -> {

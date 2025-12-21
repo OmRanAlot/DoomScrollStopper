@@ -1,5 +1,17 @@
 package com.doomscrollstopper;
 
+/*
+ * ScreenTimeTracker
+ * ------------------
+ * Aggregates device-wide foreground time using UsageStatsManager.
+ * Exposes a single API returning total 24h screen time (in minutes) + range.
+ *
+ * Implementation details:
+ *  - Uses INTERVAL_DAILY and sums all app foreground times.
+ *  - Converts milliseconds to minutes for more user-friendly display.
+ *  - Requires API 22 (LOLLIPOP_MR1) for queryUsageStats behavior.
+ */
+
 import android.app.usage.UsageStats;
 import android.app.usage.UsageStatsManager;
 import android.content.Context;

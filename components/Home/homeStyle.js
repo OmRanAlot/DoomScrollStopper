@@ -137,6 +137,41 @@ const styles = StyleSheet.create({
         fontWeight: '500',
     },
 
+    // Permissions button
+    permissionsButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: dark.surface,
+        borderRadius: radii.lg,
+        padding: spacing.md,
+        marginBottom: spacing.md,
+        borderWidth: 1,
+        borderColor: colors.primary500,
+        ...shadows.sm,
+    },
+    permissionsIcon: {
+        fontSize: 28,
+        marginRight: spacing.md,
+    },
+    permissionsContent: {
+        flex: 1,
+    },
+    permissionsTitle: {
+        fontSize: typography.body.size,
+        fontWeight: '600',
+        color: dark.textPrimary,
+        marginBottom: spacing.xs,
+    },
+    permissionsSubtitle: {
+        fontSize: typography.bodySmall.size,
+        color: dark.textSecondary,
+    },
+    permissionsArrow: {
+        fontSize: 24,
+        color: colors.primary500,
+        fontWeight: '300',
+    },
+
     // Reusable components and fallbacks (kept from previous styles)
     section: {
         marginBottom: spacing.xl,

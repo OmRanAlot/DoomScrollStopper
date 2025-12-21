@@ -1,5 +1,12 @@
 package com.doomscrollstopper;
 
+/*
+ * MainActivity
+ * ------------
+ * Standard ReactActivity host. Handles optional VPN permission result
+ * and starts the foreground service if granted.
+ */
+
 import com.facebook.react.ReactActivity;
 import com.facebook.react.ReactActivityDelegate;
 import com.facebook.react.ReactRootView;

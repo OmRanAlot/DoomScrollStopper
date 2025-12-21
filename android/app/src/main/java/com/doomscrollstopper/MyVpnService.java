@@ -72,14 +72,30 @@ public class MyVpnService extends VpnService {
             monitor.setBlockedApps(savedBlockedApps);
         }
 
+        /*
+         * MyVpnService
+         * -------------
+         * Foreground service used to maintain background monitoring.
+         * This implementation does not tunnel traffic; it keeps a persistent
+         * notification to reduce the chance of the OS killing the process
+         * while AppUsageMonitor runs.
+         *
+         * Key Points:
+         *  - Creates notification channel and runs as foreground service.
+         *  - Owns lifecycle of AppUsageMonitor and blocked apps persistence.
+         *  - Listener hooks are available for future event routing.
+         */
         // Set up listener as before
         monitor.setListener(new AppUsageMonitor.AppDetectionListener() {
             @Override
-            public void onAppDetected(String packageName, String appName) { /*...*/ }
+            public void onAppDetected(String packageName, String appName) { 
+                /* Intentionally left light */ 
+            }
             @Override
-            public void onBlockedAppOpened(String packageName, String appName) { /*...*/ }
+            public void onBlockedAppOpened(String packageName, String appName) { 
+                /* Intentionally left light */ 
+            }
         });
-        
     }
     // Start the VPN service
     @Override
@@ -119,10 +135,10 @@ public class MyVpnService extends VpnService {
                 
         //         ByteBuffer packet = ByteBuffer.allocate(32767);
                 
-        //         while (!Thread.interrupted()) {
-        //             int length = in.read(packet.array());
-        //             if (length > 0) {
-        //                 packet.limit(length);
+        if (monitor == null) {
+            monitor = new AppUsageMonitor(this);
+        }
+        monitor.startMonitoring();
                         
         //                 // Parse packet to detect app
         //                 String detectedApp = parsePacket(packet);

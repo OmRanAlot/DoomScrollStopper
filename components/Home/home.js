@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Switch, TextInput, FlatList, Alert, NativeModules, NativeEventEmitter, AppState, Platform, PermissionsAndroid } from 'react-native';
 import styles from './homeStyle';
 
@@ -18,6 +18,18 @@ const Home = () => {
     const [isLoadingStats, setIsLoadingStats] = useState(false);
     const [screenTime, setScreenTime] = useState(0);
     const [hasUsagePermission, setHasUsagePermission] = useState(false);
+
+    // Lightweight cache with TTL for native data to reduce redundant calls
+    const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+    const cacheRef = useRef({
+        installedApps: { data: [], timestamp: 0 },
+        screenTimeStats: { data: null, timestamp: 0 },
+        blockedUsage: { data: [], timestamp: 0 },
+        topApps: { data: [], timestamp: 0 },
+    });
+
+    // Debounce restartMonitoring on app resume to avoid rapid stop/start
+    const restartDebounceRef = useRef(null);
 
     // Preset apps that users commonly want to block
     const presetApps = [
@@ -72,21 +84,41 @@ const Home = () => {
             }
 
             setIsLoadingStats(true);
-            const stats = await VPNModule.getScreenTimeStats();
+            const now = Date.now();
+            // Screen time stats with TTL cache
+            let stats = null;
+            if (cacheRef.current.screenTimeStats.data && (now - cacheRef.current.screenTimeStats.timestamp) < CACHE_TTL_MS) {
+                stats = cacheRef.current.screenTimeStats.data;
+            } else {
+                stats = await VPNModule.getScreenTimeStats();
+                cacheRef.current.screenTimeStats = { data: stats, timestamp: now };
+            }
             if (stats) {
                 setScreenTime(stats.totalScreenTime || 0);
             }
 
-            // Load blocked apps usage
-            const blockedUsage = await VPNModule.getBlockedAppsUsageStats();
+            // Load blocked apps usage with TTL cache
+            let blockedUsage = null;
+            if (cacheRef.current.blockedUsage.data && (now - cacheRef.current.blockedUsage.timestamp) < CACHE_TTL_MS) {
+                blockedUsage = cacheRef.current.blockedUsage.data;
+            } else {
+                blockedUsage = await VPNModule.getBlockedAppsUsageStats();
+                cacheRef.current.blockedUsage = { data: blockedUsage, timestamp: now };
+            }
             if (blockedUsage) {
                 setBlockedAppsUsage(blockedUsage);
             }
 
-            // Load top apps usage
-            const endTime = Date.now();
+            // Load top apps usage with TTL cache
+            const endTime = now;
             const startTime = endTime - (24 * 60 * 60 * 1000); // Last 24 hours
-            const topApps = await VPNModule.getTopAppsByUsage(startTime, endTime, 5);
+            let topApps = null;
+            if (cacheRef.current.topApps.data && (now - cacheRef.current.topApps.timestamp) < CACHE_TTL_MS) {
+                topApps = cacheRef.current.topApps.data;
+            } else {
+                topApps = await VPNModule.getTopAppsByUsage(startTime, endTime, 5);
+                cacheRef.current.topApps = { data: topApps, timestamp: now };
+            }
             if (topApps) {
                 setTopAppsUsage(topApps);
             }
@@ -104,15 +136,26 @@ const Home = () => {
                 const savedBlockedApps = await new Promise((resolve, reject) => {
                     SettingsModule.getBlockedApps((apps) => resolve(apps));
                 });
-                if (savedBlockedApps) {
-                    setBlockedApps(new Set(savedBlockedApps));
+                
+                let blockedSet = new Set(savedBlockedApps || []);
+                
+                // Ensure Instagram is in blocked apps
+                if (!blockedSet.has('com.instagram.android')) {
+                    blockedSet.add('com.instagram.android');
+                    // Save updated blocked apps
+                    SettingsModule.saveBlockedApps(Array.from(blockedSet));
                 }
+                
+                setBlockedApps(blockedSet);
         
                 // Load installed apps and screen time stats
                 await Promise.all([
                     loadInstalledApps(),
                     loadScreenTimeStats()
                 ]);
+                
+                // Auto-start monitoring
+                startMonitoringWithApps(blockedSet);
             } catch (error) {
                 console.error('Failed to initialize:', error);
             }
@@ -131,10 +174,11 @@ const Home = () => {
             }
         );
 
+        // POPUP_MARKER_FRONTEND: popup/overlay event surfaced from native
         const blockedListener = appBlockerEmitter.addListener(
             'onBlockedAppOpened',
             (event) => {
-                console.log('Blocked app opened:', event);
+                console.log('POPUP_MARKER_FRONTEND blocked app overlay event', event);
             }
         );
 
@@ -142,8 +186,8 @@ const Home = () => {
         const appStateListener = AppState.addEventListener('change', (nextAppState) => {
             setAppState(prevState => {
                 if (prevState.match(/inactive|background/) && nextAppState === 'active' && isMonitoring) {
-                    console.log('Restarting monitoring after app resume');
-                    restartMonitoring();
+                    console.log('Restarting monitoring after app resume (debounced)');
+                    debouncedRestartMonitoring();
                 }
                 return nextAppState;
             });
@@ -153,6 +197,9 @@ const Home = () => {
             detectionListener.remove();
             blockedListener.remove();
             appStateListener?.remove();
+            if (restartDebounceRef.current) {
+                clearTimeout(restartDebounceRef.current);
+            }
         };
     }, [isMonitoring, loadScreenTimeStats]);
 
@@ -160,10 +207,17 @@ const Home = () => {
     // kept here to avoid cross-file refactor during styling-only changes.
     const loadInstalledApps = async () => {
         try {
+            const now = Date.now();
+            if (cacheRef.current.installedApps.data.length > 0 && (now - cacheRef.current.installedApps.timestamp) < CACHE_TTL_MS) {
+                setInstalledApps(cacheRef.current.installedApps.data);
+                return;
+            }
             const apps = await VPNModule.getInstalledApps();
-            setInstalledApps(apps || []);
+            const list = apps || [];
+            cacheRef.current.installedApps = { data: list, timestamp: now };
+            setInstalledApps(list);
         } catch (e) {
-            console.warn('loadInstalledApps stub failed', e);
+            console.warn('loadInstalledApps failed', e);
         }
     };
 
@@ -178,7 +232,40 @@ const Home = () => {
                 await VPNModule.startMonitoring();
             }, 800);
         } catch (e) {
-            console.warn('restartMonitoring stub failed', e);
+            console.warn('restartMonitoring failed', e);
+        }
+    };
+
+    const debouncedRestartMonitoring = useCallback(() => {
+        if (restartDebounceRef.current) {
+            clearTimeout(restartDebounceRef.current);
+        }
+        restartDebounceRef.current = setTimeout(() => {
+            restartMonitoring();
+        }, 1000);
+    }, [restartMonitoring]);
+
+    const startMonitoringWithApps = async (apps) => {
+        try {
+            if (apps && apps.size > 0) {
+                await VPNModule.setBlockedApps(Array.from(apps));
+                await VPNModule.startMonitoring();
+                setIsMonitoring(true);
+                console.log('Monitoring started with apps:', Array.from(apps));
+            }
+        } catch (error) {
+            console.error('Failed to start monitoring:', error);
+        }
+    };
+
+    const openPermissionsSettings = async () => {
+        try {
+            if (Platform.OS === 'android') {
+                await VPNModule.openPermissionsSettings();
+            }
+        } catch (error) {
+            console.error('Error opening permissions settings:', error);
+            Alert.alert('Error', 'Could not open permissions settings');
         }
     };
 
@@ -216,6 +303,16 @@ const Home = () => {
                             </View>
                         </View>
                     </View>
+
+                    {/* Permissions Button */}
+                    <TouchableOpacity style={styles.permissionsButton} onPress={openPermissionsSettings}>
+                        <Text style={styles.permissionsIcon}>🔐</Text>
+                        <View style={styles.permissionsContent}>
+                            <Text style={styles.permissionsTitle}>Grant Permissions</Text>
+                            <Text style={styles.permissionsSubtitle}>Enable Usage Access & Overlay permissions</Text>
+                        </View>
+                        <Text style={styles.permissionsArrow}>›</Text>
+                    </TouchableOpacity>
 
                     {/* Mood Trend */}
                     <View style={styles.cardLarge}>

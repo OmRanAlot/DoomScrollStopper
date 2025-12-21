@@ -1,5 +1,12 @@
 package com.doomscrollstopper
 
+/**
+ * MainApplication
+ * ----------------
+ * Wires React Native host and registers custom native packages.
+ * Keeps developer support aligned with BuildConfig, and loads RN runtime at startup.
+ */
+
 import android.app.Application
 import com.facebook.react.PackageList
 import com.facebook.react.ReactApplication

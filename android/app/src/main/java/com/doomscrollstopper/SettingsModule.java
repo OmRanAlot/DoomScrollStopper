@@ -1,5 +1,16 @@
 package com.doomscrollstopper;
 
+/*
+ * SettingsModule
+ * ---------------
+ * Lightweight bridge for persisting and retrieving user settings.
+ * Currently manages the blocked apps set via SharedPreferences.
+ *
+ * Notes:
+ *  - Uses a single preferences file (doomscroll_prefs) and key (blocked_apps).
+ *  - Writes are applied asynchronously (apply) to avoid main-thread blocking.
+ */
+
 import android.content.SharedPreferences;
 import android.content.Context;
 

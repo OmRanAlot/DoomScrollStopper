@@ -1,5 +1,12 @@
 package com.doomscrollstopper;
 
+/*
+ * AppBlockerPackage
+ * ------------------
+ * ReactPackage registration for custom native modules exposed to React Native.
+ * This is the integration point connecting VPNModule and SettingsModule.
+ */
+
 import com.facebook.react.ReactPackage;
 import com.facebook.react.bridge.NativeModule;
 import com.facebook.react.bridge.ReactApplicationContext;

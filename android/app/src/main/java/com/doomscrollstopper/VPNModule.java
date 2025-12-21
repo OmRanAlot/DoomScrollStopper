@@ -1,5 +1,21 @@
 package com.doomscrollstopper;
 
+/*
+ * VPNModule
+ * ---------
+ * React Native native module acting as the bridge between JS and Android OS services.
+ * Responsibilities:
+ *  - Manage permissions (Usage Stats, Overlay, optional VPN)
+ *  - Start/stop foreground monitoring service (MyVpnService)
+ *  - Expose screen time and per-app usage statistics via AppUsageMonitor & ScreenTimeTracker
+ *  - Emit real-time events to JS when apps are detected/opened
+ *
+ * Design Notes:
+ *  - Permission checks funnel through a single implementation to avoid drift.
+ *  - All methods are defensive: exceptions are caught and routed through Promises.
+ *  - Event emission uses RCTDeviceEventEmitter only if Catalyst instance is active.
+ *  - Monitoring can run without actual VPN tunneling; service is used to keep the app alive.
+ */
 
 import android.content.Intent;
 import android.provider.Settings;
@@ -71,23 +87,27 @@ public class VPNModule extends ReactContextBaseJavaModule {
     @Override
     public Map<String, Object> getConstants() {
         final Map<String, Object> constants = new HashMap<>();
-        constants.put("isScreenTimePermissionGranted", isUsageAccessGranted());
+        // Single-source permission check to avoid divergence between methods.
+        constants.put("isScreenTimePermissionGranted", hasUsageAccessPermission());
         return constants;
     }
 
+    /**
+     * Backward-compat method preserved for any external callers; delegates to the
+     * canonical implementation {@link #hasUsageAccessPermission()} to prevent logic drift.
+     */
     private boolean isUsageAccessGranted() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            try {
-                PackageManager packageManager = reactContext.getPackageManager();
-                ApplicationInfo applicationInfo = packageManager.getApplicationInfo(reactContext.getPackageName(), 0);
-                AppOpsManager appOps = (AppOpsManager) reactContext.getSystemService(Context.APP_OPS_SERVICE);
-                int mode = appOps.checkOpNoThrow("android:get_usage_stats", applicationInfo.uid, applicationInfo.packageName);
-                return (mode == AppOpsManager.MODE_ALLOWED);
-            } catch (Exception e) {
-                return false;
-            }
+        return hasUsageAccessPermission();
+    }
+
+    @ReactMethod
+    public void isUsageAccessGranted(Promise promise) {
+        try {
+            boolean granted = hasUsageAccessPermission();
+            promise.resolve(granted);
+        } catch (Exception e) {
+            promise.reject("PERMISSION_CHECK_ERROR", e.getMessage());
         }
-        return false;
     }
 
     @ReactMethod
@@ -95,6 +115,12 @@ public class VPNModule extends ReactContextBaseJavaModule {
         Intent intent = new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS);
         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         reactContext.startActivity(intent);
+    }
+
+    @ReactMethod
+    public void openPermissionsSettings() {
+        // Alias to openUsageAccessSettings to avoid duplicated intent logic.
+        openUsageAccessSettings();
     }
 
     @ReactMethod

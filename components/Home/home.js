@@ -34,6 +34,7 @@ const Home = () => {
     // Preset apps that users commonly want to block
     const presetApps = [
         { packageName: 'com.instagram.android', name: 'Instagram', icon: '📷', description: 'Social media platform' },
+        { packageName: 'com.google.android.youtube', name: 'YouTube', icon: '▶️', description: 'Video streaming' },
         { packageName: 'com.snapchat.android', name: 'Snapchat', icon: '👻', description: 'Photo sharing app' },
         { packageName: 'com.zhiliaoapp.musically', name: 'TikTok', icon: '🎵', description: 'Short video app' },
         { packageName: 'com.twitter.android', name: 'Twitter', icon: '🐦', description: 'Microblogging platform' },
@@ -138,11 +139,17 @@ const Home = () => {
                 });
                 
                 let blockedSet = new Set(savedBlockedApps || []);
-                
-                // Ensure Instagram is in blocked apps
-                if (!blockedSet.has('com.instagram.android')) {
-                    blockedSet.add('com.instagram.android');
-                    // Save updated blocked apps
+
+                // Ensure core defaults are present for quick testing coverage
+                let hasUpdates = false;
+                ['com.instagram.android', 'com.google.android.youtube'].forEach((pkg) => {
+                    if (!blockedSet.has(pkg)) {
+                        blockedSet.add(pkg);
+                        hasUpdates = true;
+                    }
+                });
+
+                if (hasUpdates) {
                     SettingsModule.saveBlockedApps(Array.from(blockedSet));
                 }
                 
@@ -337,3 +344,8 @@ const Home = () => {
 };
 
 export default Home;
+
+// 
+
+
+// TO-DO : Implement missing functionalities such as actual data fetching, event handling, and navigation as needed.

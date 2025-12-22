@@ -7,6 +7,7 @@ const Customize = () => {
     const [delayMessage, setDelayMessage] = useState('Take a moment to consider if you really need this app right now');
     const [blockedApps, setBlockedApps] = useState({
         'com.instagram.android': true,
+        'com.google.android.youtube': true,
         'com.zhiliaoapp.musically': true,
         'com.facebook.katana': true,
         'com.twitter.android': true,
@@ -47,6 +48,7 @@ const Customize = () => {
 
     const appList = [
         { packageName: 'com.instagram.android', name: 'Instagram', icon: '📷' },
+        { packageName: 'com.google.android.youtube', name: 'YouTube', icon: '▶️' },
         { packageName: 'com.zhiliaoapp.musically', name: 'TikTok', icon: '🎵' },
         { packageName: 'com.facebook.katana', name: 'Facebook', icon: '📘' },
         { packageName: 'com.twitter.android', name: 'Twitter', icon: '🐦' },

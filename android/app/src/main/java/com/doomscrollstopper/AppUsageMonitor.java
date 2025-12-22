@@ -66,6 +66,12 @@ public class AppUsageMonitor {
     // Cooldown tracking to prevent immediate re-triggers after dismissal or allow
     private final Map<String, Long> popupCooldown = new ConcurrentHashMap<>();
     private static final long POPUP_COOLDOWN_MS = 1000; // 1s cooldown to avoid rapid re-triggers after Continue
+    private static final long OVERLAY_DEBOUNCE_MS = 500; // 0.5s guard to prevent double overlay creation
+    private long overlayPendingUntil = 0L;
+    private final Object overlayLock = new Object();
+    
+    // Store the monitor runnable so we can remove it to prevent concurrent loops
+    private Runnable monitorRunnable;
 
     public interface AppDetectionListener {
         void onAppDetected(String packageName, String appName);
@@ -85,23 +91,42 @@ public class AppUsageMonitor {
 
     public void startMonitoring() {
         try{
-            if (!hasUsageStatsPermission()) {
-                requestUsageStatsPermission();
+            Log.d(TAG, "startMonitoring called; current isMonitoring=" + isMonitoring);
+            
+            // Prevent multiple concurrent monitor threads
+            if (isMonitoring) {
+                Log.d(TAG, "Monitoring already active, skipping duplicate start");
                 return;
             }
             
+            // Clean up any orphaned callbacks from previous sessions
+            if (monitorRunnable != null) {
+                Log.d(TAG, "Removing old monitor runnable");
+                handler.removeCallbacks(monitorRunnable);
+                monitorRunnable = null;
+            }
+            
+            if (!hasUsageStatsPermission()) {
+                Log.w(TAG, "Usage stats permission not granted; requesting...");
+                requestUsageStatsPermission();
+                return;
+            }
+            Log.d(TAG, "Usage stats permission OK");
+            
             if (!hasOverlayPermission()) {
+                Log.w(TAG, "Overlay permission not granted; requesting...");
                 requestOverlayPermission();
                 return;
             }
+            Log.d(TAG, "Overlay permission OK");
             
             loadBlockedAppsFromPrefs();
             Log.d(TAG, "Loaded blocked apps count=" + (blockedApps != null ? blockedApps.size() : 0));
             isMonitoring = true;
+            Log.d(TAG, "Starting monitor thread...");
 
-            new Thread(() -> {
-                monitorApps();
-            }).start();
+            monitorApps();
+            Log.d(TAG, "Monitor loop initiated");
         } catch (Exception e){
             Log.e(TAG, "Error starting monitoring", e);
         }
@@ -116,7 +141,7 @@ public class AppUsageMonitor {
     private void monitorApps() {
         // Use the class-level handler to avoid redundant instances and reduce GC pressure.
         
-        Runnable runnable = new Runnable() {
+        monitorRunnable = new Runnable() {
             @Override
             public void run() {
                 try{
@@ -136,12 +161,23 @@ public class AppUsageMonitor {
         
                         // Always trigger block if app is in blocked list
                         if (isBlocked && !isOverlayActive && !isAllowed) {
-                            // Respect cooldown per app to prevent rapid re-triggers
-                            if (lastShown != null && (now - lastShown) < POPUP_COOLDOWN_MS) {
+                            // Small debounce to avoid double overlay creation when two ticks race
+                            if (now < overlayPendingUntil) {
+                                Log.d(TAG, "Overlay debounce active for " + foregroundApp + "; skipping overlay creation");
+                            } else if (lastShown != null && (now - lastShown) < POPUP_COOLDOWN_MS) {
                                 Log.d(TAG, "Cooldown active for " + foregroundApp + ", skipping overlay");
                             } else {
-                            Log.d("AppMonitor", "Blocked app detected: " + appName);
-                            handleBlockedApp(foregroundApp, appName);
+                                synchronized (overlayLock) {
+                                    if (overlayView != null) {
+                                        Log.d(TAG, "Overlay view already being created for " + foregroundApp + "; skipping duplicate call");
+                                    } else {
+                                        // Only call handleBlockedApp if we're not already creating an overlay
+                                        Log.d("AppMonitor", "Blocked app detected: " + appName);
+                                        Log.i(TAG, "Blocked app opened: " + appName);
+                                        overlayPendingUntil = now + OVERLAY_DEBOUNCE_MS;
+                                        handleBlockedApp(foregroundApp, appName);
+                                    }
+                                }
                             }
                         }
 
@@ -154,8 +190,6 @@ public class AppUsageMonitor {
                         }   
 
                     }   
-                    // // Repeat every second
-                    // handler.postDelayed(this, 1000);
 
                     // Repeat every second
                     if (isMonitoring) {
@@ -167,7 +201,7 @@ public class AppUsageMonitor {
             }
         };
     
-        handler.post(runnable);
+        handler.post(monitorRunnable);
     }
     
     private String getCurrentForegroundApp() {
@@ -226,77 +260,122 @@ public class AppUsageMonitor {
             Log.d(TAG, "Overlay already active for: " + appName);
             return;
         }
-    
-        isOverlayActive = true;
+
+        Log.i(TAG, "Handling blocked app: " + appName);
         showDelayOverlay(packageName, appName);
     }
     
+    // CODE FOR OVERLAY DISPLAY AND INTERACTION 
     private void showDelayOverlay(String packageName, String appName) {
-        if (isOverlayActive && packageName.equals(lastAppPackage)) {
-            // Already showing for this app — don't restart
-            return;
+        // Double-check gate before posting to handler to prevent concurrent overlay creations
+        synchronized (overlayLock) {
+            if (isOverlayActive && packageName.equals(lastAppPackage)) {
+                Log.d(TAG, "Overlay already active for " + packageName + "; skipping duplicate overlay");
+                return;
+            }
+            lastAppPackage = packageName;
+            isOverlayActive = true;
+            // Set overlayView to a sentinel to prevent duplicate calls before the handler executes
+            if (overlayView == null) {
+                overlayView = new View(context);  // Sentinel to block duplicate guard checks
+            }
+            // Ensure debounce is active when we begin overlay creation
+            overlayPendingUntil = System.currentTimeMillis() + OVERLAY_DEBOUNCE_MS;
         }
-        lastAppPackage = packageName;
-        isOverlayActive = true;
+
+        Log.i(TAG, "Preparing to show overlay for " + appName + " (" + packageName + ")");
 
         handler.post(() -> {
-            // POPUP_MARKER: native overlay popup entry point (searchable)
-            Log.i(TAG, "POPUP_MARKER showing delay overlay for " + appName + " (" + packageName + ")");
-            if (overlayView != null) {
-                windowManager.removeView(overlayView);
-            }
-            
-            // Create overlay view
-            LayoutInflater inflater = LayoutInflater.from(context);
-            overlayView = inflater.inflate(R.layout.delay_overlay, null);
-            
-            TextView titleText = overlayView.findViewById(R.id.title);
-            TextView countdownText = overlayView.findViewById(R.id.countdown);
-            Button continueButton = overlayView.findViewById(R.id.continueButton);
-            Button backButton = overlayView.findViewById(R.id.backButton);
-            
-            titleText.setText("Opening " + appName);
-            
-            WindowManager.LayoutParams params = new WindowManager.LayoutParams(
-                WindowManager.LayoutParams.MATCH_PARENT,
-                WindowManager.LayoutParams.MATCH_PARENT,
-                Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ?
-                    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY :
-                    WindowManager.LayoutParams.TYPE_PHONE,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-                PixelFormat.TRANSLUCENT
-            );
-            
-            params.gravity = Gravity.CENTER;
-            windowManager.addView(overlayView, params);
-            
-            // Start countdown; during this period the user cannot immediately continue.
-            startCountdown(countdownText, continueButton, 15);
-            
-            continueButton.setOnClickListener(v -> {
-                // Allow this app for the rest of the current session
-                allowedThisSession.add(packageName);
-                // Stamp cooldown to avoid rapid re-triggers
-                popupCooldown.put(packageName, System.currentTimeMillis());
-                removeOverlay();
-                // App continues to open
-            });
-            
-            backButton.setOnClickListener(v -> {
-                // Don't add to allowed session when going back to home
-                allowedThisSession.remove(packageName);
-                // Intentionally NO cooldown on Back; we want immediate overlay on reopen
-                Log.d(TAG, "Back pressed: no cooldown; will show immediately on next open for " + packageName);
-                removeOverlay();
+            try {
+                Log.i(TAG, "Overlay handler entered for " + appName + " (" + packageName + ")");
 
-                // Return to home screen
-                Intent homeIntent = new Intent(Intent.ACTION_MAIN);
-                homeIntent.addCategory(Intent.CATEGORY_HOME);
-                homeIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                context.startActivity(homeIntent);
-            });
+                // Clean up old overlay if it exists
+                if (overlayView != null && overlayView.getParent() != null) {
+                    Log.d(TAG, "Removing old overlay view");
+                    try {
+                        windowManager.removeView(overlayView);
+                    } catch (Exception e) {
+                        Log.e(TAG, "Error removing old overlay", e);
+                    }
+                }
+                
+                // POPUP_MARKER: native overlay popup entry point (searchable)
+                Log.i(TAG, "POPUP_MARKER showing delay overlay for " + appName + " (" + packageName + ")");
+                
+                // Create overlay view
+                LayoutInflater inflater = LayoutInflater.from(context);
+                overlayView = inflater.inflate(R.layout.delay_overlay, null);
+                
+                TextView titleText = overlayView.findViewById(R.id.title);
+                TextView countdownText = overlayView.findViewById(R.id.countdown);
+                Button continueButton = overlayView.findViewById(R.id.continueButton);
+                Button backButton = overlayView.findViewById(R.id.backButton);
+                
+                titleText.setText("Opening " + appName);
+                
+                WindowManager.LayoutParams params = new WindowManager.LayoutParams(
+                    WindowManager.LayoutParams.MATCH_PARENT,
+                    WindowManager.LayoutParams.MATCH_PARENT,
+                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ?
+                        WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY :
+                        WindowManager.LayoutParams.TYPE_PHONE,
+                    // Make the overlay fully interactive and ensure touches are captured
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN |
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL |
+                    WindowManager.LayoutParams.FLAG_FULLSCREEN,
+                    PixelFormat.TRANSLUCENT
+                );
+                
+                params.gravity = Gravity.CENTER;
+                // Ensure the overlay view can receive input focus and touch
+                overlayView.setFocusable(true);
+                overlayView.setFocusableInTouchMode(true);
+                overlayView.requestFocus();
+                windowManager.addView(overlayView, params);
+                synchronized (overlayLock) {
+                    overlayPendingUntil = 0L;
+                }
+                
+                // Start countdown; during this period the user cannot immediately continue.
+                startCountdown(countdownText, continueButton, 15);
+                
+                continueButton.setOnClickListener(v -> {
+                    Log.d(TAG, "Continue clicked for " + packageName);
+                    // Allow this app for the rest of the current session
+                    allowedThisSession.add(packageName);
+                    // Stamp cooldown to avoid rapid re-triggers
+                    popupCooldown.put(packageName, System.currentTimeMillis());
+                    removeOverlay();
+                    // App continues to open
+                });
+                
+                backButton.setOnClickListener(v -> {
+                    Log.i(TAG, "Back clicked for " + packageName);
+                    // Don't add to allowed session when going back to home
+                    allowedThisSession.remove(packageName);
+                    // Intentionally NO cooldown on Back; we want immediate overlay on reopen
+                    Log.i(TAG, "Back pressed: no cooldown; will show immediately on next open for " + packageName);
+                    removeOverlay();
+
+                    // Return to home screen
+                    Intent homeIntent = new Intent(Intent.ACTION_MAIN);
+                    homeIntent.addCategory(Intent.CATEGORY_HOME);
+                    homeIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    context.startActivity(homeIntent);
+                });
+            
+                Log.i(TAG, "Delay overlay shown for " + appName + " (" + packageName + ")[INSIDE HANDLER]");
+            } catch (Exception e) {
+                Log.e(TAG, "Overlay handler error", e);
+                synchronized (overlayLock) {
+                    overlayPendingUntil = 0L;
+                    isOverlayActive = false;
+                    lastAppPackage = "";
+                    overlayView = null;
+                }
+            }
         });
+        Log.i(TAG, "Overlay shown for " + appName + " (" + packageName + ")[OUTSIDE HANDLER]");
     }
     
     private void startCountdown(TextView countdownText, Button continueButton, int seconds) {
@@ -329,6 +408,7 @@ public class AppUsageMonitor {
         }
         isOverlayActive = false;
         lastAppPackage = "";
+        overlayPendingUntil = 0L;
     }
 
     public String getAppName(String packageName) {
@@ -373,8 +453,17 @@ public class AppUsageMonitor {
     }
     
     public void stopMonitoring() {
+        Log.d(TAG, "stopMonitoring called");
         isMonitoring = false;
+        
+        // Remove any pending monitor callbacks to fully stop the loop
+        if (monitorRunnable != null) {
+            handler.removeCallbacks(monitorRunnable);
+            Log.d(TAG, "Removed monitor runnable from handler");
+        }
+        
         removeOverlay();
+        Log.d(TAG, "stopMonitoring completed");
     }
     
     public void setBlockedApps(Set<String> apps) {

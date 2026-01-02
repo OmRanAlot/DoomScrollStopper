@@ -3,36 +3,36 @@
 // Exported as plain JS/TS objects for easy consumption in React Native.
 
 export const colors = {
-  // Primary
-  primary50: '#EEF2FF',
-  primary100: '#E0E7FF',
-  primary300: '#A5B4FC',
-  primary400: '#818CF8',
-  primary500: '#6366F1',
-  primary600: '#4F46E5',
+  // Primary - Sage/Teal (Mindfulness, Calm, Present)
+  primary50: '#E8F3F0',
+  primary100: '#C8E4DD',
+  primary300: '#8DBBA3',
+  primary400: '#6BA892',
+  primary500: '#5B9A8B',
+  primary600: '#4A7F72',
 
-  // Secondary
-  secondary300: '#D8B4FE',
-  secondary400: '#C084FC',
-  secondary500: '#A855F7',
-  secondary600: '#9333EA',
+  // Secondary - Warm Earth (Grounded, Natural)
+  secondary300: '#C9BDB0',
+  secondary400: '#B3A394',
+  secondary500: '#9B8E7E',
+  secondary600: '#7A6F63',
 
-  // Accent
-  accent400: '#F9A8D4',
-  accent500: '#F472B6',
-  accent600: '#EC4899',
+  // Accent - Soft Aqua (Breath, Flow, Clarity)
+  accent400: '#9DD4C8',
+  accent500: '#7EBAA8',
+  accent600: '#5E9A88',
 
-  // Neutrals (dark-mode tuned)
+  // Neutrals (dark-mode tuned - warm neutral without blue tint)
   gray50: '#F9FAFB',
   gray100: '#F3F4F6',
   gray200: '#E5E7EB',
   gray300: '#D1D5DB',
   gray400: '#9CA3AF',
   gray500: '#6B7280',
-  gray600: '#4B5563',
-  gray700: '#374151',
-  gray800: '#1F2937',
-  gray900: '#111827',
+  gray600: '#52524E',
+  gray700: '#3A3A35',
+  gray800: '#252520',
+  gray900: '#1A1A18',
 
   // Semantic
   success100: '#D1FAE5',
@@ -111,12 +111,12 @@ export const icons = {
 // Convenience palette for dark-mode mapping (since PRD lists neutrals
 // primarily for light contexts, map dark-mode primary text/background)
 export const dark = {
-  background: colors.gray900,
-  surface: colors.gray800,
-  card: '#0f1724',
+  background: colors.gray900,      // #1A1A18 - Warm neutral black
+  surface: colors.gray800,         // #252520 - Warm neutral surface
+  card: '#1F1F1C',                 // Warm dark card background
   textPrimary: colors.gray50,
   textSecondary: colors.gray300,
-  divider: colors.gray700,
+  divider: colors.gray700,         // #3A3A35 - Warm neutral divider
   overlay: 'rgba(0,0,0,0.6)',
 };
 

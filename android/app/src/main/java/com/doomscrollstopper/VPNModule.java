@@ -48,6 +48,23 @@ import android.provider.Settings;
 import java.util.Map;
 import java.util.HashMap;
 import android.content.pm.PackageManager;
+import android.content.SharedPreferences;
+
+/*
+ * VPNModule
+ * ---------
+ * React Native native module acting as the bridge between JS and Android OS services.
+ * 
+ * CRITICAL ARCHITECTURE NOTE:
+ * This module has its OWN AppUsageMonitor instance that is SEPARATE from MyVpnService's instance.
+ * Both monitors must have synchronized blocked apps lists for the overlay to work correctly.
+ * 
+ * KEY FIXES APPLIED:
+ * 1. loadBlockedAppsIntoMonitor() - Loads blocked apps from SharedPreferences into VPNModule's monitor
+ * 2. setBlockedApps() - Now updates BOTH VPNModule's monitor AND sends to MyVpnService
+ * 3. startMonitoring() - Reloads blocked apps before starting the monitor
+ * 4. Constructor - Loads blocked apps immediately when module is initialized
+ */
 
 //This module doesn't send any packet or traffic data back to React Native.
 //It's just a "control switch" — start/stop the VPN.
@@ -55,6 +72,7 @@ import android.content.pm.PackageManager;
 
 public class VPNModule extends ReactContextBaseJavaModule {
     private static final String MODULE_NAME = "VPNModule";
+    private static final String TAG = "VPNModule";
     private ReactApplicationContext reactContext;
     private AppUsageMonitor appMonitor;
     private ScreenTimeTracker screenTimeTracker;
@@ -64,6 +82,11 @@ public class VPNModule extends ReactContextBaseJavaModule {
         this.reactContext = reactContext;
         this.appMonitor = new AppUsageMonitor(reactContext);
         this.screenTimeTracker = new ScreenTimeTracker(reactContext);
+        Log.d(TAG, "[INIT] VPNModule initialized");
+        
+        // CRITICAL FIX: Load blocked apps immediately when VPNModule is created
+        // This ensures appMonitor has blocked apps even before startMonitoring() is called
+        loadBlockedAppsIntoMonitor();
         
         // Set up listener
         appMonitor.setListener(new AppUsageMonitor.AppDetectionListener() {
@@ -77,6 +100,40 @@ public class VPNModule extends ReactContextBaseJavaModule {
                 sendEvent("onBlockedAppOpened", createAppEvent(packageName, appName));
             }
         });
+    }
+
+    /**
+     * CRITICAL FIX: Helper method to load blocked apps from SharedPreferences into VPNModule's appMonitor
+     * 
+     * WHY THIS IS NEEDED:
+     * - VPNModule has its own AppUsageMonitor instance (separate from MyVpnService's instance)
+     * - When setBlockedApps() is called from React Native, it saves to SharedPreferences via SettingsModule
+     * - VPNModule's appMonitor needs to read those saved blocked apps to show overlays
+     * - Without this, VPNModule's monitor runs with an empty blocked apps list = no overlays!
+     * 
+     * CALLED FROM:
+     * - Constructor: Loads blocked apps when module is first created
+     * - startMonitoring(): Reloads to ensure we have the latest list before monitoring starts
+     */
+    private void loadBlockedAppsIntoMonitor() {
+        try {
+            // Same SharedPreferences file and key used by SettingsModule.java
+            SharedPreferences prefs = reactContext.getSharedPreferences("doomscroll_prefs", Context.MODE_PRIVATE);
+            Set<String> savedBlockedApps = prefs.getStringSet("blocked_apps", new HashSet<>());
+            
+            if (savedBlockedApps != null && !savedBlockedApps.isEmpty()) {
+                // IMPORTANT: Create a copy to avoid SharedPreferences mutation issues
+                // SharedPreferences.getStringSet() returns a reference that shouldn't be modified
+                Set<String> blockedAppsCopy = new HashSet<>(savedBlockedApps);
+                appMonitor.setBlockedApps(blockedAppsCopy);
+                Log.d(TAG, "[LOAD_BLOCKED] ✓ Loaded " + blockedAppsCopy.size() + " blocked apps into VPNModule's monitor");
+                Log.d(TAG, "[LOAD_BLOCKED] Blocked apps: " + blockedAppsCopy.toString());
+            } else {
+                Log.d(TAG, "[LOAD_BLOCKED] No saved blocked apps found in SharedPreferences (file: doomscroll_prefs, key: blocked_apps)");
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "[LOAD_BLOCKED] ERROR loading blocked apps: " + e.getMessage(), e);
+        }
     }
 
     @Override
@@ -125,24 +182,44 @@ public class VPNModule extends ReactContextBaseJavaModule {
 
     @ReactMethod
     public void startMonitoring(Promise promise) {
-        Log.d("VPNModule", "startMonitoring called");
+        Log.d(TAG, "[START] ========== startMonitoring called ==========");
         try {
-            Log.d("VPNModule", "Starting monitoring");
-
+            // STEP 1: Start the foreground service (keeps monitoring alive even when app is backgrounded)
+            Log.d(TAG, "[START] Step 1: Starting MyVpnService foreground service...");
             Intent serviceIntent = new Intent(reactContext, MyVpnService.class);
             serviceIntent.setAction("START_VPN");
             
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 reactContext.startForegroundService(serviceIntent);
+                Log.d(TAG, "[START] Started foreground service (API >= O)");
             } else {
                 reactContext.startService(serviceIntent);
+                Log.d(TAG, "[START] Started service (API < O)");
             }
 
+            // STEP 2: CRITICAL FIX - Reload blocked apps from SharedPreferences before starting monitor
+            // This ensures VPNModule's appMonitor has the latest blocked apps list
+            Log.d(TAG, "[START] Step 2: Loading blocked apps into VPNModule's monitor...");
+            loadBlockedAppsIntoMonitor();
+            
+            // STEP 3: Log current state before starting
+            Set<String> currentBlocked = appMonitor.getBlockedApps();
+            int blockedCount = (currentBlocked != null) ? currentBlocked.size() : 0;
+            Log.d(TAG, "[START] Step 3: VPNModule's monitor has " + blockedCount + " blocked apps");
+            if (currentBlocked != null && !currentBlocked.isEmpty()) {
+                Log.d(TAG, "[START] Blocked apps list: " + currentBlocked.toString());
+            } else {
+                Log.w(TAG, "[START] WARNING: No blocked apps! Overlay will NOT show for any app!");
+            }
+
+            // STEP 4: Start the monitoring loop
+            Log.d(TAG, "[START] Step 4: Starting appMonitor.startMonitoring()...");
             appMonitor.startMonitoring();
-            Log.d("VPNModule", "startMonitoring success, resolving promise");
+            
+            Log.d(TAG, "[START] ========== startMonitoring complete ==========");
             promise.resolve(true);
         } catch (Exception e) {
-            Log.d("VPNModule", "startMonitoring failed, rejecting promise");
+            Log.e(TAG, "[START] startMonitoring failed", e);
             promise.reject("START_ERROR", e.getMessage());
         }
     }
@@ -169,17 +246,17 @@ public class VPNModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void stopMonitoring(Promise promise) {
         try {
-            Log.d("VPNModule", "Stopping monitoring");
+            Log.d(TAG, "[STOP] stopMonitoring called");
             appMonitor.stopMonitoring();
             
             Intent serviceIntent = new Intent(reactContext, MyVpnService.class);
             serviceIntent.setAction("STOP_VPN");
             reactContext.stopService(serviceIntent);
             
-            Log.d("VPNModule", "stopMonitoring success, resolving promise");
+            Log.d(TAG, "[STOP] stopMonitoring success");
             promise.resolve(true);
         } catch (Exception e) {
-            Log.d("VPNModule", "stopMonitoring failed, rejecting promise");
+            Log.e(TAG, "[STOP] stopMonitoring failed", e);
             promise.reject("STOP_ERROR", e.getMessage());
         }
     }
@@ -284,8 +361,20 @@ public class VPNModule extends ReactContextBaseJavaModule {
         }
     }
     
+    /**
+     * setBlockedApps - Called from React Native (Customize screen) when user toggles apps
+     * 
+     * CRITICAL: This method must update TWO places:
+     * 1. VPNModule's own appMonitor instance (for overlay detection)
+     * 2. MyVpnService's appMonitor instance (via Intent)
+     * 
+     * Previous bug: Only updated MyVpnService, leaving VPNModule's monitor empty!
+     */
     @ReactMethod
     public void setBlockedApps(ReadableArray apps, Promise promise) {
+        Log.d(TAG, "[SET_BLOCKED] ========== setBlockedApps called ==========");
+        Log.d(TAG, "[SET_BLOCKED] Received " + (apps != null ? apps.size() : 0) + " apps from React Native");
+        
         try {
             Set<String> blockedApps = new HashSet<>();
 
@@ -294,18 +383,30 @@ public class VPNModule extends ReactContextBaseJavaModule {
                     String single = apps.getString(0);
                     if (single != null && single.contains(".")) {
                         blockedApps.add(single);
+                        Log.d(TAG, "[SET_BLOCKED] Added single app: " + single);
                     }
                 } else {
                     // ✅ Normal case: proper array of strings
                     for (int i = 0; i < apps.size(); i++) {
                         if (apps.getType(i) == com.facebook.react.bridge.ReadableType.String) {
-                            blockedApps.add(apps.getString(i));
+                            String app = apps.getString(i);
+                            blockedApps.add(app);
+                            Log.d(TAG, "[SET_BLOCKED] Added app: " + app);
                         }
                     }
                 }
             }
+            
+            Log.d(TAG, "[SET_BLOCKED] Total blocked apps parsed: " + blockedApps.size());
+            Log.d(TAG, "[SET_BLOCKED] Blocked apps: " + blockedApps.toString());
+
+            // CRITICAL FIX #1: Update VPNModule's OWN appMonitor instance
+            // Without this line, VPNModule's monitor has NO blocked apps and overlay never shows!
+            appMonitor.setBlockedApps(blockedApps);
+            Log.d(TAG, "[SET_BLOCKED] ✓ Updated VPNModule's appMonitor with " + blockedApps.size() + " apps");
     
-            // Send intent to service
+            // CRITICAL FIX #2: Also send intent to MyVpnService to update ITS monitor
+            // The service has its own AppUsageMonitor instance that also needs updating
             Intent intent = new Intent(reactContext, MyVpnService.class);
             intent.setAction("UPDATE_BLOCKED_APPS");
             intent.putStringArrayListExtra("blockedApps", new ArrayList<>(blockedApps));
@@ -315,9 +416,12 @@ public class VPNModule extends ReactContextBaseJavaModule {
             } else {
                 reactContext.startService(intent);
             }
-    
+            Log.d(TAG, "[SET_BLOCKED] ✓ Sent UPDATE_BLOCKED_APPS intent to MyVpnService");
+            
+            Log.d(TAG, "[SET_BLOCKED] ========== setBlockedApps complete ==========");
             promise.resolve(true);
         } catch (Exception e) {
+            Log.e(TAG, "[SET_BLOCKED] ERROR: " + e.getMessage(), e);
             promise.reject("SET_APPS_ERROR", e.getMessage());
         }
     }

@@ -12,13 +12,13 @@ const Progress = () => {
     ];
 
     const weeklyData = [
-        { day: 'Mon', hours: 2.5, color: '#A8C5F0' },
-        { day: 'Tue', hours: 3.2, color: '#A8C5F0' },
-        { day: 'Wed', hours: 1.8, color: '#A8C5F0' },
-        { day: 'Thu', hours: 4.1, color: '#A8C5F0' },
-        { day: 'Fri', hours: 2.9, color: '#A8C5F0' },
-        { day: 'Sat', hours: 1.5, color: '#A8C5F0' },
-        { day: 'Sun', hours: 2.3, color: '#A8C5F0' },
+        { day: 'Mon', hours: 2.5, color: '#5B9A8B' },
+        { day: 'Tue', hours: 3.2, color: '#5B9A8B' },
+        { day: 'Wed', hours: 1.8, color: '#5B9A8B' },
+        { day: 'Thu', hours: 4.1, color: '#5B9A8B' },
+        { day: 'Fri', hours: 2.9, color: '#5B9A8B' },
+        { day: 'Sat', hours: 1.5, color: '#5B9A8B' },
+        { day: 'Sun', hours: 2.3, color: '#5B9A8B' },
     ];
 
     const maxHours = Math.max(...weeklyData.map(d => d.hours));
@@ -81,34 +81,7 @@ const Progress = () => {
                 </View>
             </View>
 
-            {/* Achievements Grid */}
-            <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Achievements</Text>
-                <View style={styles.achievementsGrid}>
-                    {achievements.map((achievement) => (
-                        <View key={achievement.id} style={styles.achievementCard}>
-                            <View style={[
-                                styles.achievementIcon,
-                                { backgroundColor: achievement.unlocked ? '#A8C5F0' : '#3A3F3E' }
-                            ]}>
-                                <Text style={styles.achievementIconText}>{achievement.icon}</Text>
-                            </View>
-                            <Text style={[
-                                styles.achievementName,
-                                { color: achievement.unlocked ? '#DDE8F9' : '#9CA3AF' }
-                            ]}>
-                                {achievement.name}
-                            </Text>
-                            <Text style={[
-                                styles.achievementDescription,
-                                { color: achievement.unlocked ? '#9CA3AF' : '#6B7280' }
-                            ]}>
-                                {achievement.description}
-                            </Text>
-                        </View>
-                    ))}
-                </View>
-            </View>
+          
 
             {/* Monthly Summary */}
             <View style={styles.section}>
@@ -189,7 +162,7 @@ const styles = StyleSheet.create({
     progressValue: {
         fontSize: typography.body.size,
         fontWeight: '600',
-        color: colors.primary300,
+        color: colors.primary500,
     },
     progressBar: {
         height: 8,
@@ -200,7 +173,7 @@ const styles = StyleSheet.create({
     },
     progressFill: {
         height: '100%',
-        backgroundColor: colors.primary300,
+        backgroundColor: colors.primary500,
         borderRadius: 4,
     },
     progressPercentage: {
@@ -223,7 +196,7 @@ const styles = StyleSheet.create({
     streakNumber: {
         fontSize: 48,
         fontWeight: '700',
-        color: colors.primary300,
+        color: colors.primary500,
         marginBottom: spacing.sm,
     },
     streakLabel: {
@@ -325,7 +298,7 @@ const styles = StyleSheet.create({
     summaryNumber: {
         fontSize: 24,
         fontWeight: '700',
-        color: colors.primary300,
+        color: colors.primary500,
         marginBottom: spacing.xs,
     },
     summaryLabel: {

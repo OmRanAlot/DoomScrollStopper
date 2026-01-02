@@ -62,14 +62,20 @@ public class MyVpnService extends VpnService {
         super.onCreate();
         createNotificationChannel();
 
+        Log.d(TAG, "[CREATE] MyVpnService onCreate");
+
         Notification notification = createNotification("VPN Active");
         startForeground(NOTIFICATION_ID, notification);
+
+        Log.d(TAG, "[CREATE] Initializing AppUsageMonitor");
 
         monitor = new AppUsageMonitor(this);
         // Restore blocked apps
         Set<String> savedBlockedApps = loadBlockedApps();
+        Log.d(TAG, "[CREATE] Loaded savedBlockedApps size=" + (savedBlockedApps != null ? savedBlockedApps.size() : 0));
         if (savedBlockedApps != null) {
             monitor.setBlockedApps(savedBlockedApps);
+            Log.d(TAG, "[CREATE] Applied blocked apps to monitor");
         }
 
         /*
@@ -101,8 +107,11 @@ public class MyVpnService extends VpnService {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
 
+        Log.d(TAG, "[CMD] onStartCommand intent=" + intent);
+
         if (intent != null){
             String action = intent.getAction();
+            Log.d(TAG, "[CMD] action=" + action);
             if ("START_VPN".equals(action)) {
                 Notification notification = createNotification("VPN Active");
                 startForeground(NOTIFICATION_ID, notification);
@@ -113,6 +122,7 @@ public class MyVpnService extends VpnService {
                 stopSelf();
             } else if ("UPDATE_BLOCKED_APPS".equals(action)) {
                 Set<String> blocked = new HashSet<>(intent.getStringArrayListExtra("blockedApps"));
+                Log.d(TAG, "[CMD] UPDATE_BLOCKED_APPS size=" + blocked.size() + " apps=" + blocked.toString());
                 if (monitor != null) monitor.setBlockedApps(blocked);
                 saveBlockedApps(blocked);
             }
@@ -124,45 +134,16 @@ public class MyVpnService extends VpnService {
 
     // Start monitoring
     private void startMonitoring() {
-        // vpnThread = new Thread(() -> {
-        //     try {
-        //         DatagramChannel tunnel = DatagramChannel.open();
-        //         tunnel.connect(new InetSocketAddress("127.0.0.1", 8087));
-        //         tunnel.configureBlocking(false);
-                
-        //         FileInputStream in = new FileInputStream(vpnInterface.getFileDescriptor());
-        //         FileOutputStream out = new FileOutputStream(vpnInterface.getFileDescriptor());
-                
-        //         ByteBuffer packet = ByteBuffer.allocate(32767);
-                
         if (monitor == null) {
             monitor = new AppUsageMonitor(this);
+            // Load and set blocked apps
+            Set<String> savedBlockedApps = loadBlockedApps();
+            if (savedBlockedApps != null && !savedBlockedApps.isEmpty()) {
+                monitor.setBlockedApps(savedBlockedApps);
+            }
         }
         monitor.startMonitoring();
-                        
-        //                 // Parse packet to detect app
-        //                 String detectedApp = parsePacket(packet);
-        //                 if (detectedApp != null && callback != null) {
-        //                     callback.onAppDetected(detectedApp);
-        //                 }
-                        
-        //                 // Forward packet
-        //                 out.write(packet.array(), 0, length);
-        //                 packet.clear();
-        //             }
-                    
-        //             Thread.sleep(10);
-        //         }
-        //     } catch (Exception e) {
-        //         Log.e(TAG, "VPN monitoring error", e);
-        //     }
-        // });
-        // vpnThread.start();
-        if (monitor == null) {
-            monitor = new AppUsageMonitor(this);
-            monitor.startMonitoring();
-        }
-        
+        Log.d(TAG, "Monitoring started with " + (monitor.getBlockedApps() != null ? monitor.getBlockedApps().size() : 0) + " blocked apps");
     }
 
     // Stop monitoring
@@ -316,13 +297,16 @@ public class MyVpnService extends VpnService {
     private void saveBlockedApps(Set<String> blockedApps) {
         getSharedPreferences("doomscroll_prefs", Context.MODE_PRIVATE)
             .edit()
-            .putStringSet("blockedApps", blockedApps)
+            .putStringSet("blocked_apps", blockedApps)
             .apply();
+        Log.d(TAG, "[PREF] saveBlockedApps size=" + (blockedApps != null ? blockedApps.size() : 0) + " data=" + blockedApps);
     }
     
     private Set<String> loadBlockedApps() {
-        return getSharedPreferences("doomscroll_prefs", Context.MODE_PRIVATE)
-            .getStringSet("blockedApps", new HashSet<>());
+        Set<String> set = getSharedPreferences("doomscroll_prefs", Context.MODE_PRIVATE)
+            .getStringSet("blocked_apps", new HashSet<>());
+        Log.d(TAG, "[PREF] loadBlockedApps size=" + (set != null ? set.size() : 0) + " data=" + set);
+        return set;
     }
     
     

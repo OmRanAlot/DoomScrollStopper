@@ -87,11 +87,13 @@ public class AppUsageMonitor {
         try{
             if (!hasUsageStatsPermission()) {
                 requestUsageStatsPermission();
+                Log.d(TAG, "startMonitoring: missing usage stats permission");
                 return;
             }
             
             if (!hasOverlayPermission()) {
                 requestOverlayPermission();
+                Log.d(TAG, "startMonitoring: missing overlay permission");
                 return;
             }
             
@@ -132,7 +134,7 @@ public class AppUsageMonitor {
                         Long lastShown = popupCooldown.get(foregroundApp);
                         long now = System.currentTimeMillis();
                         long remainingCooldown = (lastShown == null) ? 0 : Math.max(0, POPUP_COOLDOWN_MS - (now - lastShown));
-                        Log.d(TAG, "Tick fgApp=" + foregroundApp + " blocked=" + isBlocked + " allowedThisSession=" + isAllowed + " overlayActive=" + isOverlayActive + " cooldownRemainingMs=" + remainingCooldown);
+                        Log.d(TAG, "Tick fgApp=" + foregroundApp + " blocked=" + isBlocked + " allowedThisSession=" + isAllowed + " overlayActive=" + isOverlayActive + " cooldownMs=" + remainingCooldown + " blockedSize=" + blockedApps.size());
         
                         // Always trigger block if app is in blocked list
                         if (isBlocked && !isOverlayActive && !isAllowed) {
@@ -140,7 +142,7 @@ public class AppUsageMonitor {
                             if (lastShown != null && (now - lastShown) < POPUP_COOLDOWN_MS) {
                                 Log.d(TAG, "Cooldown active for " + foregroundApp + ", skipping overlay");
                             } else {
-                            Log.d("AppMonitor", "Blocked app detected: " + appName);
+                            Log.d(TAG, "Blocked app detected: " + appName + " pkg=" + foregroundApp);
                             handleBlockedApp(foregroundApp, appName);
                             }
                         }
@@ -317,6 +319,7 @@ public class AppUsageMonitor {
                 } else {
                     countdownText.setText("You can continue now");
                     continueButton.setEnabled(true);
+                    Log.d(TAG, "Countdown complete for " + lastAppPackage);
                 }
             }
         }, 0);
@@ -329,6 +332,7 @@ public class AppUsageMonitor {
         }
         isOverlayActive = false;
         lastAppPackage = "";
+        Log.d(TAG, "Overlay removed");
     }
 
     public String getAppName(String packageName) {

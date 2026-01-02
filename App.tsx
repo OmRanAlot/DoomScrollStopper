@@ -33,15 +33,15 @@ const App = () => {
               fontWeight: '600',
               marginTop: 4,
             },
-            tabBarActiveTintColor: '#A8C5F0',
+            tabBarActiveTintColor: '#5B9A8B',
             tabBarInactiveTintColor: '#6B7280',
             tabBarIcon: ({ focused, color }) => {
               let iconText;
 
-              if (route.name === 'Home') {
-                iconText = focused ? '🏠' : '🏠';
-              } else if (route.name === 'Customize') {
+              if (route.name === 'Customize') {
                 iconText = focused ? '⚙️' : '⚙️';
+              } else if (route.name === 'Home') {
+                iconText = focused ? '🏠' : '🏠';
               } else if (route.name === 'Progress') {
                 iconText = focused ? '📊' : '📊';
               }
@@ -50,8 +50,8 @@ const App = () => {
             },
           })}
         >
-          <Tab.Screen name="Home" component={Home} />
           <Tab.Screen name="Customize" component={Customize} />
+          <Tab.Screen name="Home" component={Home} />
           <Tab.Screen name="Progress" component={Progress} />
         </Tab.Navigator>
       </NavigationContainer>

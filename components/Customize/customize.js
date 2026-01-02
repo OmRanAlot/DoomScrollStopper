@@ -1,10 +1,17 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Switch, TextInput } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Switch, TextInput, NativeModules, Alert } from 'react-native';
+
+const { VPNModule, SettingsModule } = NativeModules;
 
 const Customize = () => {
     const [delayTime, setDelayTime] = useState(15);
     const [selectedFocusMode, setSelectedFocusMode] = useState('study');
     const [delayMessage, setDelayMessage] = useState('Take a moment to consider if you really need this app right now');
+    
+    // CRITICAL: This state controls whether app monitoring is active
+    // When true, the AppUsageMonitor polls foreground apps and shows overlay for blocked apps
+    const [isMonitoringEnabled, setIsMonitoringEnabled] = useState(false);
+    
     const [blockedApps, setBlockedApps] = useState({
         'com.instagram.android': true,
         'com.zhiliaoapp.musically': true,
@@ -12,7 +19,42 @@ const Customize = () => {
         'com.twitter.android': true,
         'com.snapchat.android': false,
         'com.whatsapp': false,
+        'com.google.android.youtube': true,
     });
+
+    // Load blocked apps from native storage on mount
+    useEffect(() => {
+        const loadBlockedApps = async () => {
+            console.log('[Customize] useEffect: loading blocked apps from native storage');
+            try {
+                const savedApps = await new Promise((resolve, reject) => {
+                    SettingsModule.getBlockedApps((apps) => {
+                        console.log('[Customize] getBlockedApps callback apps=', apps);
+                        if (apps) {
+                            resolve(apps);
+                        } else {
+                            reject('No apps returned');
+                        }
+                    });
+                });
+                
+                if (savedApps && savedApps.length > 0) {
+                    const appMap = {};
+                    savedApps.forEach(packageName => {
+                        appMap[packageName] = true;
+                    });
+                    console.log('[Customize] loaded', Object.keys(appMap).length, 'blocked apps from storage');
+                    setBlockedApps(appMap);
+                } else {
+                    console.log('[Customize] no saved blocked apps found');
+                }
+            } catch (error) {
+                console.log('[Customize] loadBlockedApps failed:', error);
+            }
+        };
+        
+        loadBlockedApps();
+    }, []);
 
     const focusModes = [
         {
@@ -20,28 +62,28 @@ const Customize = () => {
             name: 'Study Mode',
             description: 'Blocks social media and entertainment apps',
             icon: '📚',
-            color: '#A8C5F0'
+            color: '#5B9A8B'
         },
         {
             id: 'work',
             name: 'Work Mode',
             description: 'Blocks gaming and social apps during work hours',
             icon: '💼',
-            color: '#A8C5F0'
+            color: '#5B9A8B'
         },
         {
             id: 'sleep',
             name: 'Sleep Mode',
             description: 'Blocks all non-essential apps after 10 PM',
             icon: '🌙',
-            color: '#A8C5F0'
+            color: '#5B9A8B'
         },
         {
             id: 'custom',
             name: 'Custom Mode',
             description: 'Create your own blocking rules',
             icon: '⚙️',
-            color: '#A8C5F0'
+            color: '#5B9A8B'
         }
     ];
 
@@ -54,23 +96,118 @@ const Customize = () => {
         { packageName: 'com.whatsapp', name: 'WhatsApp', icon: '💬' },
         { packageName: 'com.reddit.frontpage', name: 'Reddit', icon: '🤖' },
         { packageName: 'com.spotify.music', name: 'Spotify', icon: '🎵' },
+        { packageName: 'com.google.android.youtube', name: 'YouTube', icon: '▶️' },
     ];
 
-    const toggleAppBlock = (packageName) => {
-        setBlockedApps(prev => ({
-            ...prev,
-            [packageName]: !prev[packageName]
-        }));
+    const toggleAppBlock = async (packageName) => {
+        console.log('[Customize] toggleAppBlock package=', packageName, 'current=', !!blockedApps[packageName]);
+        const newBlockedApps = {
+            ...blockedApps,
+            [packageName]: !blockedApps[packageName]
+        };
+        setBlockedApps(newBlockedApps);
+        
+        // Get the list of blocked apps
+        const blockedAppsList = Object.keys(newBlockedApps).filter(pkg => newBlockedApps[pkg]);
+        console.log('[Customize] blockedAppsList after toggle:', blockedAppsList);
+        
+        try {
+            console.log('[Customize] saving to SettingsModule...');
+            SettingsModule.saveBlockedApps(blockedAppsList);
+            console.log('[Customize] calling VPNModule.setBlockedApps...');
+            await VPNModule.setBlockedApps(blockedAppsList);
+            console.log('[Customize] updated blocked apps OK');
+        } catch (error) {
+            console.error('[Customize] Failed to update blocked apps:', error);
+        }
     };
 
-    const handleSaveChanges = () => {
-        // Here you would typically save the settings to storage
-        console.log('Saving changes:', { delayTime, selectedFocusMode, delayMessage, blockedApps });
+    const handleSaveChanges = async () => {
+        console.log('[Customize] handleSaveChanges start');
+        const blockedAppsList = Object.keys(blockedApps).filter(pkg => blockedApps[pkg]);
+        console.log('[Customize] handleSaveChanges blockedAppsList=', blockedAppsList);
+        
+        try {
+            SettingsModule.saveBlockedApps(blockedAppsList);
+            console.log('[Customize] SettingsModule.saveBlockedApps done');
+            await VPNModule.setBlockedApps(blockedAppsList);
+            console.log('[Customize] VPNModule.setBlockedApps done');
+            console.log('[Customize] settings saved:', { delayTime, selectedFocusMode, delayMessage, blockedApps: blockedAppsList });
+            Alert.alert('Success', 'Settings saved successfully!');
+        } catch (error) {
+            console.error('[Customize] Failed to save settings:', error);
+            Alert.alert('Error', 'Failed to save settings: ' + error.message);
+        }
     };
 
     const handleDelayTimeChange = (text) => {
         const value = parseInt(text, 10) || 15;
         setDelayTime(Math.max(5, Math.min(120, value)));
+    };
+
+    /**
+     * CRITICAL: Toggle monitoring on/off
+     * This starts/stops the AppUsageMonitor which:
+     * 1. Polls foreground app every 1 second
+     * 2. Detects when a blocked app is opened
+     * 3. Shows the delay overlay popup
+     * 
+     * Without calling startMonitoring(), no overlay will ever appear!
+     */
+    const toggleMonitoring = async () => {
+        console.log('[Customize] toggleMonitoring called, current state:', isMonitoringEnabled);
+        
+        if (!isMonitoringEnabled) {
+            // Starting monitoring - check permissions first
+            try {
+                console.log('[Customize] Checking permissions...');
+                const perms = await VPNModule.checkPermissions();
+                console.log('[Customize] Permissions:', perms);
+                
+                if (!perms.usage) {
+                    console.log('[Customize] Missing usage permission, requesting...');
+                    Alert.alert(
+                        'Permission Required',
+                        'Usage Access permission is needed to detect which apps you open. Please grant this permission.',
+                        [{ text: 'Open Settings', onPress: () => VPNModule.requestPermissions() }]
+                    );
+                    return;
+                }
+                
+                if (!perms.overlay) {
+                    console.log('[Customize] Missing overlay permission, requesting...');
+                    Alert.alert(
+                        'Permission Required', 
+                        'Overlay permission is needed to show the delay popup. Please grant this permission.',
+                        [{ text: 'Open Settings', onPress: () => VPNModule.requestOverlayPermission() }]
+                    );
+                    return;
+                }
+                
+                // Both permissions granted, start monitoring
+                console.log('[Customize] Starting monitoring...');
+                await VPNModule.startMonitoring();
+                setIsMonitoringEnabled(true);
+                console.log('[Customize] Monitoring started successfully!');
+                Alert.alert('Success', 'App blocking is now active! When you open a blocked app, a delay screen will appear.');
+                
+            } catch (error) {
+                console.error('[Customize] Failed to start monitoring:', error);
+                Alert.alert('Error', 'Failed to start monitoring: ' + error.message);
+            }
+        } else {
+            // Stopping monitoring
+            try {
+                console.log('[Customize] Stopping monitoring...');
+                await VPNModule.stopMonitoring();
+                setIsMonitoringEnabled(false);
+                console.log('[Customize] Monitoring stopped');
+                Alert.alert('Info', 'App blocking is now disabled.');
+            } catch (error) {
+                console.error('[Customize] Failed to stop monitoring:', error);
+                Alert.alert('Error', 'Failed to stop monitoring: ' + error.message);
+            }
+        }
     };
 
     return (
@@ -79,6 +216,29 @@ const Customize = () => {
             <View style={styles.header}>
                 <Text style={styles.title}>Customize Settings</Text>
                 <Text style={styles.subtitle}>Personalize your focus experience</Text>
+            </View>
+
+            {/* CRITICAL: Monitoring Toggle - Must be ON for blocking to work! */}
+            <View style={styles.section}>
+                <Text style={styles.sectionTitle}>🛡️ App Blocking</Text>
+                <View style={styles.monitoringToggle}>
+                    <View style={styles.monitoringInfo}>
+                        <Text style={styles.monitoringTitle}>
+                            {isMonitoringEnabled ? '✅ Blocking Active' : '⚠️ Blocking Inactive'}
+                        </Text>
+                        <Text style={styles.monitoringSubtitle}>
+                            {isMonitoringEnabled 
+                                ? 'Opening blocked apps will show a delay screen' 
+                                : 'Turn on to start blocking selected apps'}
+                        </Text>
+                    </View>
+                    <Switch
+                        value={isMonitoringEnabled}
+                        onValueChange={toggleMonitoring}
+                        trackColor={{ false: '#3A3F3E', true: '#5B9A8B' }}
+                        thumbColor={isMonitoringEnabled ? '#8DBBA3' : '#9CA3AF'}
+                    />
+                </View>
             </View>
 
             {/* App Selector */}
@@ -94,8 +254,8 @@ const Customize = () => {
                             <Switch
                                 value={blockedApps[app.packageName] || false}
                                 onValueChange={() => toggleAppBlock(app.packageName)}
-                                trackColor={{ false: '#3A3F3E', true: '#A8C5F0' }}
-                                thumbColor={blockedApps[app.packageName] ? '#DDE8F9' : '#9CA3AF'}
+                                trackColor={{ false: '#3A3F3E', true: '#5B9A8B' }}
+                                thumbColor={blockedApps[app.packageName] ? '#8DBBA3' : '#9CA3AF'}
                             />
                         </View>
                     ))}
@@ -218,6 +378,31 @@ const styles = StyleSheet.create({
         color: dark.textPrimary,
         marginBottom: spacing.md,
     },
+    // Monitoring toggle styles - CRITICAL UI element!
+    monitoringToggle: {
+        backgroundColor: dark.surface,
+        borderRadius: radii.lg,
+        padding: spacing.lg,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        borderWidth: 2,
+        borderColor: colors.primary,
+    },
+    monitoringInfo: {
+        flex: 1,
+        marginRight: spacing.md,
+    },
+    monitoringTitle: {
+        fontSize: typography.h3.size,
+        fontWeight: '600',
+        color: dark.textPrimary,
+        marginBottom: spacing.xs,
+    },
+    monitoringSubtitle: {
+        fontSize: typography.caption.size,
+        color: dark.textSecondary,
+    },
     appsContainer: {
         backgroundColor: dark.surface,
         borderRadius: radii.lg,
@@ -258,7 +443,7 @@ const styles = StyleSheet.create({
     delayValue: {
         fontSize: 24,
         fontWeight: '700',
-        color: colors.primary300,
+        color: colors.primary500,
         marginBottom: spacing.md,
     },
     inputContainer: {
@@ -304,7 +489,7 @@ const styles = StyleSheet.create({
         borderColor: 'transparent',
     },
     selectedFocusMode: {
-        borderColor: colors.primary300,
+        borderColor: colors.primary500,
         backgroundColor: dark.surface,
     },
     modeIcon: {
@@ -328,7 +513,7 @@ const styles = StyleSheet.create({
         marginBottom: spacing.xs,
     },
     selectedModeName: {
-        color: colors.primary300,
+        color: colors.primary500,
     },
     modeDescription: {
         fontSize: typography.bodySmall.size,
@@ -359,7 +544,7 @@ const styles = StyleSheet.create({
         marginTop: spacing.sm,
     },
     saveButton: {
-        backgroundColor: colors.primary300,
+        backgroundColor: colors.primary500,
         borderRadius: radii.lg,
         paddingVertical: spacing.lg,
         paddingHorizontal: spacing.xl,

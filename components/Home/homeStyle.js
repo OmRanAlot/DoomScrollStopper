@@ -58,7 +58,137 @@ const styles = StyleSheet.create({
         fontSize: typography.h2.size,
         fontWeight: '700',
         color: dark.textPrimary,
+        marginBottom: spacing.lg,
+    },
+
+    // Stats Grid
+    statsGrid: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: spacing.md,
+    },
+    statBox: {
+        flex: 1,
+        alignItems: 'center',
+        padding: spacing.md,
+        backgroundColor: dark.background,
+        borderRadius: radii.lg,
+        marginHorizontal: spacing.xs,
+    },
+    statIcon: {
+        fontSize: 32,
         marginBottom: spacing.sm,
+    },
+    statValue: {
+        fontSize: typography.h2.size,
+        fontWeight: '700',
+        color: dark.textPrimary,
+        marginBottom: spacing.xs,
+    },
+    statLabel: {
+        fontSize: typography.caption.size,
+        color: dark.textSecondary,
+        textAlign: 'center',
+    },
+
+    // Focus Score
+    focusScoreContainer: {
+        marginTop: spacing.lg,
+        paddingTop: spacing.lg,
+        borderTopWidth: 1,
+        borderTopColor: dark.divider,
+    },
+    focusScoreLabel: {
+        fontSize: typography.body.size,
+        color: dark.textSecondary,
+        marginBottom: spacing.sm,
+    },
+    focusScoreBar: {
+        height: 12,
+        backgroundColor: dark.background,
+        borderRadius: radii.full,
+        overflow: 'hidden',
+        marginBottom: spacing.sm,
+    },
+    focusScoreFill: {
+        height: '100%',
+        backgroundColor: colors.primary500,
+    },
+    focusScoreValue: {
+        fontSize: typography.h3.size,
+        fontWeight: '700',
+        color: colors.primary500,
+        textAlign: 'right',
+    },
+
+    // App Usage Items
+    appUsageItem: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: spacing.md,
+        borderBottomWidth: 1,
+        borderBottomColor: dark.divider,
+    },
+    appUsageLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+    },
+    appUsageIcon: {
+        fontSize: 28,
+        marginRight: spacing.md,
+    },
+    appUsageName: {
+        fontSize: typography.body.size,
+        fontWeight: '500',
+        color: dark.textPrimary,
+    },
+    appUsageRight: {
+        alignItems: 'flex-end',
+        minWidth: 80,
+    },
+    appUsageTime: {
+        fontSize: typography.body.size,
+        fontWeight: '600',
+        color: dark.textPrimary,
+        marginBottom: spacing.xs,
+    },
+    appUsageBarContainer: {
+        width: 80,
+        height: 6,
+        backgroundColor: dark.background,
+        borderRadius: radii.full,
+        overflow: 'hidden',
+    },
+    appUsageBar: {
+        height: '100%',
+        backgroundColor: colors.primary500,
+    },
+
+    // Tip Card
+    tipCard: {
+        backgroundColor: dark.surface,
+        borderRadius: radii.xxl,
+        padding: spacing.lg,
+        marginBottom: spacing.xl,
+        borderWidth: 1,
+        borderColor: dark.divider,
+    },
+    tipIcon: {
+        fontSize: 32,
+        marginBottom: spacing.sm,
+    },
+    tipTitle: {
+        fontSize: typography.h3.size,
+        fontWeight: '700',
+        color: dark.textPrimary,
+        marginBottom: spacing.sm,
+    },
+    tipText: {
+        fontSize: typography.body.size,
+        color: dark.textSecondary,
+        lineHeight: typography.body.lineHeight,
     },
 
     // Stats layout
@@ -82,14 +212,7 @@ const styles = StyleSheet.create({
         marginTop: spacing.xs,
     },
 
-    // Chart placeholder
-    chartPlaceholder: {
-        height: 140,
-        borderRadius: radii.md,
-        backgroundColor: dark.background,
-        borderWidth: 1,
-        borderColor: dark.divider,
-    },
+    
 
     // Small card
     cardSmall: {

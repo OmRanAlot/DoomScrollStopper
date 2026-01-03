@@ -31,8 +31,22 @@ const VPNSwitch = () => {
         const savedBlockedApps = await new Promise((resolve, reject) => {
           SettingsModule.getBlockedApps((apps) => resolve(apps));
         });
-        if (savedBlockedApps) {
-          setBlockedApps(new Set(savedBlockedApps));
+
+        let initialBlocked = new Set(savedBlockedApps || []);
+        let updatedDefaults = false;
+        ['com.instagram.android', 'com.google.android.youtube'].forEach((pkg) => {
+          if (!initialBlocked.has(pkg)) {
+            initialBlocked.add(pkg);
+            updatedDefaults = true;
+          }
+        });
+
+        if (updatedDefaults) {
+          SettingsModule.saveBlockedApps(Array.from(initialBlocked));
+        }
+
+        if (initialBlocked.size > 0) {
+          setBlockedApps(initialBlocked);
         }
   
         // Load installed apps

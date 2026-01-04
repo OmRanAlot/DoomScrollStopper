@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import tokens from '../../design/tokens';
 
+
 type Props = {
   duration?: number; // seconds
   goals?: string[];

@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
-
+import TopBar from '../TopBar/TopBar';
 const Progress = () => {
     const achievements = [
         { id: 1, name: 'First Focus', description: 'Complete your first focus session', icon: '🎯', unlocked: true },
@@ -15,7 +15,7 @@ const Progress = () => {
         { day: 'Mon', hours: 2.5, color: '#5B9A8B' },
         { day: 'Tue', hours: 3.2, color: '#5B9A8B' },
         { day: 'Wed', hours: 1.8, color: '#5B9A8B' },
-        { day: 'Thu', hours: 4.1, color: '#5B9A8B' },
+        { day: 'Thu', hours: 5.1, color: '#5B9A8B' },
         { day: 'Fri', hours: 2.9, color: '#5B9A8B' },
         { day: 'Sat', hours: 1.5, color: '#5B9A8B' },
         { day: 'Sun', hours: 2.3, color: '#5B9A8B' },
@@ -24,6 +24,7 @@ const Progress = () => {
     const maxHours = Math.max(...weeklyData.map(d => d.hours));
 
     return (
+        <><TopBar />
         <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
             {/* Header */}
             <View style={styles.header}>
@@ -68,7 +69,7 @@ const Progress = () => {
                                     style={[
                                         styles.barFill, 
                                         { 
-                                            height: `${(data.hours / maxHours) * 100}%`,
+                                            height: `${(data.hours / maxHours) * 50}%`,
                                             backgroundColor: data.color
                                         }
                                     ]} 
@@ -106,6 +107,7 @@ const Progress = () => {
                 </View>
             </View>
         </ScrollView>
+        </>
     );
 };
 
@@ -221,7 +223,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'flex-end',
-        height: 120,
+        height: 200,
     },
     graphBar: {
         alignItems: 'center',
@@ -231,7 +233,7 @@ const styles = StyleSheet.create({
         width: 20,
         borderRadius: 10,
         marginBottom: spacing.md,
-        minHeight: 4,
+        minHeight: 1,
     },
     barLabel: {
         fontSize: typography.caption.size,
@@ -242,44 +244,7 @@ const styles = StyleSheet.create({
         fontSize: typography.overline.size,
         color: colors.gray500,
     },
-    achievementsGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        // spacing via child margins
-    },
-    achievementCard: {
-        backgroundColor: dark.surface,
-        borderRadius: radii.lg,
-        padding: spacing.md,
-        alignItems: 'center',
-        width: '48%',
-        borderWidth: 1,
-        borderColor: dark.divider,
-    },
-    achievementIcon: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: spacing.md,
-    },
-    achievementIconText: {
-        fontSize: 24,
-    },
-    achievementName: {
-        fontSize: typography.bodySmall.size,
-        fontWeight: '600',
-        marginBottom: spacing.xs,
-        textAlign: 'center',
-        color: dark.textPrimary,
-    },
-    achievementDescription: {
-        fontSize: typography.caption.size,
-        textAlign: 'center',
-        lineHeight: typography.caption.lineHeight || 16,
-        color: dark.textSecondary,
-    },
+ 
     summaryCard: {
         backgroundColor: dark.surface,
         borderRadius: radii.lg,

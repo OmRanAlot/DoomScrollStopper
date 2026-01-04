@@ -1,17 +1,18 @@
 // App.tsx
 import React from 'react';
-import { SafeAreaView, StyleSheet, Text } from 'react-native';
+import {StyleSheet, Text } from 'react-native';
 import Home from './components/Home/home';
 import Customize from './components/Customize/customize';
 import Progress from './components/Progress/progress';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 const Tab = createBottomTabNavigator();
 
 const App = () => {
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaProvider>
       <NavigationContainer>
         <Tab.Navigator 
           screenOptions={({ route }) => ({
@@ -55,7 +56,7 @@ const App = () => {
           <Tab.Screen name="Progress" component={Progress} />
         </Tab.Navigator>
       </NavigationContainer>
-    </SafeAreaView>
+    </SafeAreaProvider>
   );
 };
 

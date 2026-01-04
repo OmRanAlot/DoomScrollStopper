@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Switch, TextInput, NativeModules, Alert } from 'react-native';
-
+import TopBar from '../TopBar/TopBar';
 const { VPNModule, SettingsModule } = NativeModules;
 
 const Customize = () => {
@@ -213,6 +213,8 @@ const Customize = () => {
     };
 
     return (
+        <>
+        <TopBar />
         <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
             {/* Header */}
             <View style={styles.header}>
@@ -344,6 +346,7 @@ const Customize = () => {
                 <Text style={styles.saveButtonIcon}>✅</Text>
             </TouchableOpacity>
         </ScrollView>
+        </>
     );
 };
 

@@ -212,9 +212,11 @@ public class VPNModule extends ReactContextBaseJavaModule {
                 Log.w(TAG, "[START] WARNING: No blocked apps! Overlay will NOT show for any app!");
             }
 
-            // STEP 4: Start the monitoring loop
-            Log.d(TAG, "[START] Step 4: Starting appMonitor.startMonitoring()...");
-            appMonitor.startMonitoring();
+            // STEP 4: MyVpnService handles the monitoring loop
+            // VPNModule's appMonitor should NOT start monitoring to prevent double overlays
+            // Only MyVpnService's monitor instance should be active
+            Log.d(TAG, "[START] Step 4: MyVpnService will handle monitoring (VPNModule monitor stays idle)");
+            // REMOVED: appMonitor.startMonitoring(); // <- This caused double overlays!
             
             Log.d(TAG, "[START] ========== startMonitoring complete ==========");
             promise.resolve(true);

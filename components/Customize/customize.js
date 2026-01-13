@@ -322,6 +322,24 @@ const Customize = () => {
                 </View>
             </View>
 
+            {/* Delay Screen Message Editor */}
+            <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Delay Screen Message</Text>
+                <View style={styles.messageContainer}>
+                    <TextInput
+                        style={styles.messageInput}
+                        value={delayMessage}
+                        onChangeText={setDelayMessage}
+                        placeholder="Enter your custom message..."
+                        placeholderTextColor="#9CA3AF"
+                        multiline
+                        numberOfLines={3}
+                        maxLength={200}
+                    />
+                    <Text style={styles.characterCount}>{delayMessage.length}/200</Text>
+                </View>
+            </View>
+
             {/* Focus Modes */}
             <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Focus Modes</Text>
@@ -355,23 +373,7 @@ const Customize = () => {
                 </View>
             </View>
 
-            {/* Delay Screen Message Editor */}
-            <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Delay Screen Message</Text>
-                <View style={styles.messageContainer}>
-                    <TextInput
-                        style={styles.messageInput}
-                        value={delayMessage}
-                        onChangeText={setDelayMessage}
-                        placeholder="Enter your custom message..."
-                        placeholderTextColor="#9CA3AF"
-                        multiline
-                        numberOfLines={3}
-                        maxLength={200}
-                    />
-                    <Text style={styles.characterCount}>{delayMessage.length}/200</Text>
-                </View>
-            </View>
+            
 
             {/* Save Changes Button */}
             <TouchableOpacity style={styles.saveButton} onPress={handleSaveChanges}>

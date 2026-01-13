@@ -112,26 +112,44 @@ public class MyVpnService extends VpnService {
         if (intent != null){
             String action = intent.getAction();
             Log.d(TAG, "[CMD] action=" + action);
-            if ("START_VPN".equals(action)) {
-                Notification notification = createNotification("VPN Active");
-                startForeground(NOTIFICATION_ID, notification);
-                startMonitoring();
-            } else if ("STOP_VPN".equals(action)) {
-                stopMonitoring();
-                stopForeground(true);
-                stopSelf();
-            } else if ("UPDATE_BLOCKED_APPS".equals(action)) {
-                Set<String> blocked = new HashSet<>(intent.getStringArrayListExtra("blockedApps"));
-                Log.d(TAG, "[CMD] UPDATE_BLOCKED_APPS size=" + blocked.size() + " apps=" + blocked.toString());
-                if (monitor != null) monitor.setBlockedApps(blocked);
-                saveBlockedApps(blocked);
-            } else if ("SET_DELAY_MESSAGE".equals(action)) {
-                String message = intent.getStringExtra("message");
-                Log.d(TAG, "[CMD] SET_DELAY_MESSAGE message=" + message);
-                if (monitor != null && message != null) {
-                    monitor.setDelayMessage(message);
-                }
+
+            // Handle all the Intent actions here
+
+            switch (action) {
+                case "START_VPN":
+                    Notification notification = createNotification("VPN Active");
+                    startForeground(NOTIFICATION_ID, notification);
+                    startMonitoring();
+                    break;
+                case "STOP_VPN":
+                    stopMonitoring();
+                    stopForeground(true);
+                    stopSelf();
+                    break;
+                case "UPDATE_BLOCKED_APPS":
+                    Set<String> blocked = new HashSet<>(intent.getStringArrayListExtra("blockedApps"));
+                    Log.d(TAG, "[CMD] UPDATE_BLOCKED_APPS size=" + blocked.size() + " apps=" + blocked.toString());
+                    if (monitor != null) monitor.setBlockedApps(blocked);
+                    saveBlockedApps(blocked);
+                    break;
+                case "SET_DELAY_MESSAGE":
+                    String message = intent.getStringExtra("message");
+                    Log.d(TAG, "[CMD] SET_DELAY_MESSAGE message=" + message);
+                    if (monitor != null && message != null) {
+                        monitor.setDelayMessage(message);
+                    }
+                    break;
+                case "SET_DELAY_TIME":
+                    int seconds = intent.getIntExtra("seconds", 15);
+                    Log.d(TAG, "[CMD] SET_DELAY_TIME seconds=" + seconds);
+                    if (monitor != null) {
+                        monitor.setDelayTime(seconds);
+                    }
+                    break;
+                default:
+                    Log.w(TAG, "[CMD] Unknown action: " + action);
             }
+
         }
 
         // Return START_STICKY so service restarts if killed

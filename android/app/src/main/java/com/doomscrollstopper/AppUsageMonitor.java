@@ -70,6 +70,9 @@ public class AppUsageMonitor {
     private long overlayPendingUntil = 0L;
     private final Object overlayLock = new Object();
     
+    // Custom message for the delay overlay (set from React Native)
+    private String customMessage = "Take a moment to consider if you really need this app right now";
+    private int customDelayTimeSeconds = 15; // Default delay time for countdown
     // Store the monitor runnable so we can remove it to prevent concurrent loops
     private Runnable monitorRunnable;
 
@@ -139,6 +142,7 @@ public class AppUsageMonitor {
         blockedApps = new HashSet<>(appSet); // make a copy
     }
 
+    //main monitoring loop that checks the foreground app every second and shows the overlay if needed
     private void monitorApps() {
         // Use the class-level handler to avoid redundant instances and reduce GC pressure.
         
@@ -256,6 +260,7 @@ public class AppUsageMonitor {
         return null;
     }
     
+    //checks if the app is already being handled by an active overlay to prevent duplicate overlays
     private void handleBlockedApp(String packageName, String appName) {
         if (isOverlayActive && packageName.equals(lastAppPackage)) {
             Log.d(TAG, "Overlay already active for: " + appName);
@@ -266,7 +271,7 @@ public class AppUsageMonitor {
         showDelayOverlay(packageName, appName);
     }
     
-    // CODE FOR OVERLAY DISPLAY AND INTERACTION 
+    // CODE FOR OVERLAY DISPLAY AND INTERACTION  show overlay
     private void showDelayOverlay(String packageName, String appName) {
         // Double-check gate before posting to handler to prevent concurrent overlay creations
         synchronized (overlayLock) {
@@ -308,12 +313,13 @@ public class AppUsageMonitor {
                 overlayView = inflater.inflate(R.layout.delay_overlay, null);
                 
                 TextView titleText = overlayView.findViewById(R.id.title);
+                TextView messageText = overlayView.findViewById(R.id.message);
                 TextView countdownText = overlayView.findViewById(R.id.countdown);
                 Button continueButton = overlayView.findViewById(R.id.continueButton);
                 Button backButton = overlayView.findViewById(R.id.backButton);
                 
                 titleText.setText("Opening " + appName);
-                
+                messageText.setText(customMessage);
                 WindowManager.LayoutParams params = new WindowManager.LayoutParams(
                     WindowManager.LayoutParams.MATCH_PARENT,
                     WindowManager.LayoutParams.MATCH_PARENT,
@@ -338,7 +344,7 @@ public class AppUsageMonitor {
                 }
                 
                 // Start countdown; during this period the user cannot immediately continue.
-                startCountdown(countdownText, continueButton, 15);
+                startCountdown(countdownText, continueButton, customDelayTimeSeconds);
                 
                 continueButton.setOnClickListener(v -> {
                     Log.d(TAG, "Continue clicked for " + packageName);
@@ -480,7 +486,26 @@ public class AppUsageMonitor {
         return new HashSet<>(blockedApps);
     }
     
-    // New methods for getting app usage statistics
+    public void setDelayMessage(String message) {
+        if (message != null && !message.trim().isEmpty()) {
+            this.customMessage = message;
+            Log.d(TAG, "Custom delay message updated: " + message);
+        }
+    }
+    
+    public void setDelayTime(int seconds) {
+        // This method can be used to set a custom delay time for the countdown
+        // For now, we will just log it, as the countdown is currently hardcoded to 15 seconds
+        if (seconds < 5) seconds = 5; // Minimum 5 seconds
+        if (seconds > 120) seconds = 120; // Maximum 120 seconds
+
+        this.customDelayTimeSeconds = seconds;
+        Log.d(TAG, "Custom delay time set: " + seconds + " seconds");
+    }
+
+    // TO IMPLEMENT
+
+     // New methods for getting app usage statistics
     public long getAppUsageTime(String packageName, long startTime, long endTime) {
         try {
             if (!hasUsageStatsPermission()) {

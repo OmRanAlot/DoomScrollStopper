@@ -125,6 +125,12 @@ public class MyVpnService extends VpnService {
                 Log.d(TAG, "[CMD] UPDATE_BLOCKED_APPS size=" + blocked.size() + " apps=" + blocked.toString());
                 if (monitor != null) monitor.setBlockedApps(blocked);
                 saveBlockedApps(blocked);
+            } else if ("SET_DELAY_MESSAGE".equals(action)) {
+                String message = intent.getStringExtra("message");
+                Log.d(TAG, "[CMD] SET_DELAY_MESSAGE message=" + message);
+                if (monitor != null && message != null) {
+                    monitor.setDelayMessage(message);
+                }
             }
         }
 

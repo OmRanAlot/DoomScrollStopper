@@ -134,6 +134,20 @@ const Customize = () => {
             console.log('[Customize] SettingsModule.saveBlockedApps done');
             await VPNModule.setBlockedApps(blockedAppsList);
             console.log('[Customize] VPNModule.setBlockedApps done');
+            
+            // Save custom delay message
+            if (delayMessage && delayMessage.trim()) {
+                await VPNModule.setDelayMessage(delayMessage);
+                console.log('[Customize] Delay message updated:', delayMessage);
+            }
+            
+            // Save custom delay time
+            const finalDelayTime = parseInt(delayTime, 10);
+            if (!isNaN(finalDelayTime) && finalDelayTime >= 5 && finalDelayTime <= 120) {
+                await VPNModule.setDelayTime(finalDelayTime);
+                console.log('[Customize] Delay time updated:', finalDelayTime);
+            }
+            
             console.log('[Customize] settings saved:', { delayTime, selectedFocusMode, delayMessage, blockedApps: blockedAppsList });
             Alert.alert('Success', 'Settings saved successfully!');
         } catch (error) {
@@ -143,8 +157,26 @@ const Customize = () => {
     };
 
     const handleDelayTimeChange = (text) => {
-        const value = parseInt(text, 10) || 15;
-        setDelayTime(Math.max(5, Math.min(120, value)));
+        // Allow user to type freely without clamping
+        // Empty string or invalid input will be handled on blur
+        if (text === '') {
+            setDelayTime('');
+        } else {
+            const value = parseInt(text, 10);
+            if (!isNaN(value)) {
+                setDelayTime(value);
+            }
+        }
+    };
+
+    const handleDelayTimeBlur = () => {
+        // Only clamp the value when user leaves the input field
+        const value = parseInt(delayTime, 10);
+        if (isNaN(value) || value < 5) {
+            setDelayTime(5);
+        } else if (value > 120) {
+            setDelayTime(120);
+        }
     };
 
     /**
@@ -277,6 +309,7 @@ const Customize = () => {
                             style={styles.delayInput}
                             value={delayTime.toString()}
                             onChangeText={handleDelayTimeChange}
+                            onBlur={handleDelayTimeBlur}
                             keyboardType="numeric"
                             placeholder="15"
                             placeholderTextColor="#9CA3AF"

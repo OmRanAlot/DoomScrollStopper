@@ -565,6 +565,50 @@ public class VPNModule extends ReactContextBaseJavaModule {
         result.putBoolean("usage", hasUsageAccessPermission());
         promise.resolve(result);
     }
+    
+    @ReactMethod
+    public void setDelayMessage(String message, Promise promise) {
+        try {
+            Log.d(TAG, "[SET_MESSAGE] Setting delay message: " + message);
+            
+            // Update VPNModule's appMonitor
+            appMonitor.setDelayMessage(message);
+            
+            // Also send to MyVpnService via Intent
+            Intent serviceIntent = new Intent(reactContext, MyVpnService.class);
+            serviceIntent.setAction("SET_DELAY_MESSAGE");
+            serviceIntent.putExtra("message", message);
+            reactContext.startService(serviceIntent);
+            
+            Log.d(TAG, "[SET_MESSAGE] Message updated successfully");
+            promise.resolve(true);
+        } catch (Exception e) {
+            Log.e(TAG, "[SET_MESSAGE] Failed to set message", e);
+            promise.reject("SET_MESSAGE_ERROR", e.getMessage());
+        }
+    }
+
+    @ReactMethod
+    public void setDelayTime(int seconds, Promise promise) {
+        try {
+            Log.d(TAG, "[SET_MESSAGE] Setting delay timer to " + seconds + " seconds");
+            
+            // Update VPNModule's appMonitor
+            appMonitor.setDelayTime(seconds);
+            
+            // Also send to MyVpnService via Intent
+            Intent serviceIntent = new Intent(reactContext, MyVpnService.class);
+            serviceIntent.setAction("SET_DELAY_TIME");
+            serviceIntent.putExtra("seconds", seconds);
+            reactContext.startService(serviceIntent);
+            
+            Log.d(TAG, "[SET_MESSAGE] Message updated successfully");
+            promise.resolve(true);
+        } catch (Exception e) {
+            Log.e(TAG, "[SET_MESSAGE] Failed to set message", e);
+            promise.reject("SET_MESSAGE_ERROR", e.getMessage());
+        }
+    }
 
     private boolean hasUsageAccessPermission() {
         try {

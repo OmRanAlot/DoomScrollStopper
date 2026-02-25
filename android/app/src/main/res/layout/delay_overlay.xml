@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- POPUP_MARKER_XML: overlay popup layout definition -->
+<!--
+    DELAY OVERLAY LAYOUT
+    This is the full-screen popup that appears when a user opens a blocked app.
+    It blocks the app with a semi-transparent overlay and forces a delay before allowing access.
+-->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -8,6 +12,7 @@
     android:background="#F0000000"
     android:padding="32dp">
 
+    <!-- App name being opened -->
     <TextView
         android:id="@+id/title"
         android:layout_width="wrap_content"
@@ -18,6 +23,7 @@
         android:textStyle="bold"
         android:layout_marginBottom="16dp" />
 
+    <!-- Custom motivational message -->
     <TextView
         android:id="@+id/message"
         android:layout_width="wrap_content"
@@ -25,8 +31,21 @@
         android:textSize="16sp"
         android:textColor="#CCCCCC"
         android:textAlignment="center"
-        android:layout_marginBottom="32dp" />
+        android:layout_marginBottom="24dp" />
 
+    <!-- Circular progress animation (fills during countdown) -->
+    <ProgressBar
+        android:id="@+id/progressBar"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="120dp"
+        android:layout_height="120dp"
+        android:indeterminate="false"
+        android:max="100"
+        android:progress="0"
+        android:progressDrawable="@android:drawable/progress_horizontal"
+        android:layout_marginBottom="24dp" />
+
+    <!-- Countdown text (shows remaining seconds) -->
     <TextView
         android:id="@+id/countdown"
         android:layout_width="wrap_content"
@@ -36,12 +55,14 @@
         android:textColor="#FFFFFF"
         android:layout_marginBottom="32dp" />
 
+    <!-- Button container -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center">
 
+        <!-- BACK button - always visible, returns user to home screen -->
         <Button
             android:id="@+id/backButton"
             android:layout_width="wrap_content"
@@ -51,12 +72,13 @@
             android:backgroundTint="#FF5252"
             android:textColor="#FFFFFF" />
 
+        <!-- CONTINUE button - hidden until countdown finishes -->
         <Button
             android:id="@+id/continueButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Continue"
-            android:enabled="false"
+            android:visibility="gone"
             android:backgroundTint="#4CAF50"
             android:textColor="#FFFFFF" />
 

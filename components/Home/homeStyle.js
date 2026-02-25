@@ -1,340 +1,312 @@
-import { StyleSheet, Platform } from 'react-native';
-// Import tokens; keep import JS-friendly
+import { StyleSheet, Platform, Dimensions } from 'react-native';
 const tokens = require('../../design/tokens').default;
 
-const { dark, spacing, radii, typography, colors, shadows } = tokens;
+const { spacing, radii, typography, shadows, colors } = tokens;
+const s = colors.stitch; // { navy, mint, seafoam, steel, appBg, appSurface, appBorder, appText, appAccent }
+
+const { width } = Dimensions.get('window');
 
 const styles = StyleSheet.create({
-    // Container
     container: {
         flex: 1,
-        backgroundColor: dark.background,
+        backgroundColor: s.navy,
+    },
+    scrollContainer: {
+        flex: 1,
+    },
+    scrollContent: {
+        paddingHorizontal: spacing.lg,
+        paddingBottom: spacing.xxxl,
     },
 
-    // App wrapper (inner content padding)
-    appWrapper: {
+    // --- Inner Header ---
+    innerHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingBottom: spacing.lg,
+        zIndex: 10,
+    },
+    iconButton: {
+        padding: spacing.sm,
+        borderRadius: radii.full,
+        backgroundColor: 'rgba(255,255,255,0.05)',
+    },
+    statusChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(255,255,255,0.05)',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.1)',
         paddingHorizontal: spacing.md,
-        paddingTop: spacing.lg,
-        paddingBottom: spacing.xl,
-        backgroundColor: dark.background,
-        flex: 1,
-    },
-
-    // Top header (logo + title)
-    topHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: spacing.sm,
-    },
-    logo: {
-        fontSize: 42,
-        marginRight: spacing.md,
-        lineHeight: 42,
-    },
-    appTitle: {
-        fontSize: typography.h1.size,
-        lineHeight: typography.h1.lineHeight,
-        fontWeight: '700',
-        color: dark.textPrimary,
-        ...(Platform.OS === 'ios' ? { fontFamily: typography.fontFamilyIOSDisplay } : { fontFamily: typography.fontFamilyAndroid }),
-    },
-
-    // Content stack
-    content: {
-        marginTop: spacing.sm,
-    },
-
-    // Large card used for stats and mood chart
-    cardLarge: {
-        backgroundColor: dark.surface,
-        borderRadius: radii.xxl,
-        padding: spacing.xl,
-        marginBottom: spacing.lg,
-        borderWidth: 1,
-        borderColor: dark.divider,
-        ...shadows.md,
-    },
-    cardTitle: {
-        fontSize: typography.h2.size,
-        fontWeight: '700',
-        color: dark.textPrimary,
-        marginBottom: spacing.lg,
-    },
-
-    // Stats Grid
-    statsGrid: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginBottom: spacing.md,
-    },
-    statBox: {
-        flex: 1,
-        alignItems: 'center',
-        padding: spacing.md,
-        backgroundColor: dark.background,
-        borderRadius: radii.lg,
-        marginHorizontal: spacing.xs,
-    },
-    statIcon: {
-        fontSize: 32,
-        marginBottom: spacing.sm,
-    },
-    statValue: {
-        fontSize: typography.h2.size,
-        fontWeight: '700',
-        color: dark.textPrimary,
-        marginBottom: spacing.xs,
-    },
-    statLabel: {
-        fontSize: typography.caption.size,
-        color: dark.textSecondary,
-        textAlign: 'center',
-    },
-
-    // Focus Score
-    focusScoreContainer: {
-        marginTop: spacing.lg,
-        paddingTop: spacing.lg,
-        borderTopWidth: 1,
-        borderTopColor: dark.divider,
-    },
-    focusScoreLabel: {
-        fontSize: typography.body.size,
-        color: dark.textSecondary,
-        marginBottom: spacing.sm,
-    },
-    focusScoreBar: {
-        height: 12,
-        backgroundColor: dark.background,
+        paddingVertical: 6,
         borderRadius: radii.full,
-        overflow: 'hidden',
-        marginBottom: spacing.sm,
     },
-    focusScoreFill: {
-        height: '100%',
-        backgroundColor: colors.primary500,
-    },
-    focusScoreValue: {
-        fontSize: typography.h3.size,
-        fontWeight: '700',
-        color: colors.primary500,
-        textAlign: 'right',
-    },
-
-    // App Usage Items
-    appUsageItem: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingVertical: spacing.md,
-        borderBottomWidth: 1,
-        borderBottomColor: dark.divider,
-    },
-    appUsageLeft: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        flex: 1,
-    },
-    appUsageIcon: {
-        fontSize: 28,
-        marginRight: spacing.md,
-    },
-    appUsageName: {
-        fontSize: typography.body.size,
-        fontWeight: '500',
-        color: dark.textPrimary,
-    },
-    appUsageRight: {
-        alignItems: 'flex-end',
-        minWidth: 80,
-    },
-    appUsageTime: {
-        fontSize: typography.body.size,
-        fontWeight: '600',
-        color: dark.textPrimary,
-        marginBottom: spacing.xs,
-    },
-    appUsageBarContainer: {
-        width: 80,
+    pulseDot: {
+        width: 6,
         height: 6,
-        backgroundColor: dark.background,
-        borderRadius: radii.full,
-        overflow: 'hidden',
+        borderRadius: 3,
+        backgroundColor: s.seafoam,
+        marginRight: spacing.sm,
     },
-    appUsageBar: {
-        height: '100%',
-        backgroundColor: colors.primary500,
+    statusText: {
+        fontSize: 10,
+        fontWeight: 'bold',
+        color: 'rgba(194,231,218,0.8)',
+        letterSpacing: 2,
     },
-
-    // Tip Card
-    tipCard: {
-        backgroundColor: dark.surface,
-        borderRadius: radii.xxl,
-        padding: spacing.lg,
-        marginBottom: spacing.xl,
-        borderWidth: 1,
-        borderColor: dark.divider,
-    },
-    tipIcon: {
-        fontSize: 32,
-        marginBottom: spacing.sm,
-    },
-    tipTitle: {
-        fontSize: typography.h3.size,
-        fontWeight: '700',
-        color: dark.textPrimary,
-        marginBottom: spacing.sm,
-    },
-    tipText: {
-        fontSize: typography.body.size,
-        color: dark.textSecondary,
-        lineHeight: typography.body.lineHeight,
+    notificationDot: {
+        position: 'absolute',
+        top: 8,
+        right: 8,
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        backgroundColor: s.steel,
     },
 
-    // Stats layout
-    statsRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginBottom: spacing.md,
-    },
-    statCol: {
-        flex: 1,
-        paddingRight: spacing.md,
-    },
-    statLabel: {
-        fontSize: typography.caption.size,
-        color: dark.textSecondary,
-    },
-    statValue: {
-        fontSize: 28,
-        fontWeight: '800',
-        color: colors.primary500,
-        marginTop: spacing.xs,
-    },
-
-    
-
-    // Small card
-    cardSmall: {
-        backgroundColor: dark.surface,
-        borderRadius: radii.lg,
-        padding: spacing.md,
-        marginBottom: spacing.md,
-        borderWidth: 1,
-        borderColor: dark.divider,
-    },
-    cardText: {
-        fontSize: typography.bodySmall.size,
-        color: dark.textSecondary,
-    },
-
-    // Footer call-to-action
-    footerButton: {
-        marginTop: spacing.lg,
-        backgroundColor: colors.primary500,
-        paddingVertical: spacing.md,
-        borderRadius: radii.xxl,
-        alignItems: 'center',
-    },
-    footerText: {
-        color: dark.background,
-        fontSize: typography.body.size,
-        fontWeight: '700',
-    },
-
-    // Header bar (legacy small header)
-    headerBar: {
-        height: 50,
-        width: '100%',
-        backgroundColor: dark.surface,
-        marginHorizontal: 0,
-        paddingHorizontal: 0,
-        borderRadius: 0,
+    // --- Score Dial ---
+    scoreContainer: {
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: spacing.sm,
+        marginTop: spacing.sm,
+        marginBottom: spacing.xxl,
+        position: 'relative',
+        height: 280,
     },
-    headerBarText: {
-        fontSize: typography.body.size,
-        color: dark.textSecondary,
-        fontWeight: '500',
+    circleBackgroundGlow: {
+        position: 'absolute',
+        width: 250,
+        height: 250,
+        borderRadius: 125,
+        backgroundColor: 'rgba(98, 144, 195, 0.15)', // steel/15
+        /// No blur easily achievable across both platforms without heavy libs, 
+        /// using a large shadow to fake blur glow
+        shadowColor: s.steel,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.8,
+        shadowRadius: 50,
+        elevation: 20,
     },
-
-    // Permissions button
-    permissionsButton: {
-        flexDirection: 'row',
+    scoreCircle: {
+        width: 260,
+        height: 260,
+        borderRadius: 130,
+        borderWidth: 4,
+        borderColor: 'rgba(255,255,255,0.05)',
         alignItems: 'center',
-        backgroundColor: dark.surface,
-        borderRadius: radii.lg,
-        padding: spacing.md,
-        marginBottom: spacing.md,
-        borderWidth: 1,
-        borderColor: colors.primary500,
-        ...shadows.sm,
+        justifyContent: 'center',
     },
-    permissionsIcon: {
-        fontSize: 28,
-        marginRight: spacing.md,
+    // Faking the progress ring by just making a colored border. 
+    // Wait, let's just use the scoreContent since SVG isn't here
+    innerScoreContent: {
+        alignItems: 'center',
+        justifyContent: 'center',
     },
-    permissionsContent: {
-        flex: 1,
-    },
-    permissionsTitle: {
-        fontSize: typography.body.size,
-        fontWeight: '600',
-        color: dark.textPrimary,
+    scoreLabel: {
+        color: s.steel,
+        fontWeight: '500',
+        letterSpacing: 1.5,
+        fontSize: 12,
         marginBottom: spacing.xs,
     },
-    permissionsSubtitle: {
-        fontSize: typography.bodySmall.size,
-        color: dark.textSecondary,
+    scoreValue: {
+        color: s.mint,
+        fontSize: 72,
+        fontWeight: '700',
+        letterSpacing: -2,
     },
-    permissionsArrow: {
-        fontSize: 24,
-        color: colors.primary500,
-        fontWeight: '300',
+    trendChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: spacing.sm,
+        paddingHorizontal: spacing.md,
+        paddingVertical: 4,
+        borderRadius: radii.md,
+        backgroundColor: 'rgba(241,255,231,0.05)',
+        borderWidth: 1,
+        borderColor: 'rgba(241,255,231,0.1)',
     },
-
-    // Reusable components and fallbacks (kept from previous styles)
-    section: {
-        marginBottom: spacing.xl,
-    },
-    sectionTitle: {
-        fontSize: typography.h3.size,
-        fontWeight: '600',
-        color: dark.textPrimary,
-        marginBottom: spacing.sm,
-    },
-    sectionSubtitle: {
-        fontSize: typography.bodySmall.size,
-        color: dark.textSecondary,
-        marginBottom: spacing.lg,
+    trendText: {
+        color: s.mint,
+        fontSize: 12,
+        fontWeight: 'bold',
+        marginLeft: 4,
     },
 
-    // Simple list/item styles reused elsewhere
-    appItem: {
+    // --- Glass Grid ---
+    glassGrid: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: spacing.xxl,
+    },
+    glassCard: {
+        width: (width - spacing.lg * 2 - spacing.md) / 2,
+        backgroundColor: 'rgba(255, 255, 255, 0.03)',
+        borderWidth: 1,
+        borderColor: 'rgba(194, 231, 218, 0.1)',
+        borderRadius: radii.xl,
+        padding: spacing.lg,
+    },
+    glassCardIconBoxSteel: {
+        padding: 8,
+        borderRadius: radii.md,
+        backgroundColor: 'rgba(98,144,195,0.1)',
+        alignSelf: 'flex-start',
+        marginBottom: spacing.md,
+    },
+    glassCardIconBoxSeafoam: {
+        padding: 8,
+        borderRadius: radii.md,
+        backgroundColor: 'rgba(194,231,218,0.1)',
+        alignSelf: 'flex-start',
+        marginBottom: spacing.md,
+    },
+    glassCardLabel: {
+        color: 'rgba(241, 255, 231, 0.5)',
+        fontSize: 12,
+        fontWeight: '500',
+        letterSpacing: 1,
+        marginBottom: 4,
+    },
+    glassCardValues: {
+        flexDirection: 'row',
+        alignItems: 'baseline',
+    },
+    glassCardValueBig: {
+        color: s.mint,
+        fontSize: 32,
+        fontWeight: '700',
+        marginRight: 4,
+    },
+    glassCardValueSmall: {
+        color: s.steel,
+        fontSize: 10,
+        fontWeight: 'bold',
+        letterSpacing: 1.5,
+    },
+
+    // --- Insight Section ---
+    insightSection: {
+        marginBottom: spacing.xxl,
+    },
+    insightHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingVertical: spacing.md,
-        paddingHorizontal: spacing.md,
-        backgroundColor: dark.surface,
-        borderRadius: radii.md,
-        marginBottom: spacing.sm,
+        marginBottom: spacing.md,
+    },
+    insightTitle: {
+        color: s.steel,
+        fontSize: 14,
+        fontWeight: 'bold',
+        letterSpacing: 2,
+    },
+    insightReportLink: {
+        color: s.seafoam,
+        fontSize: 10,
+        fontWeight: 'bold',
+        letterSpacing: 1.5,
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(194,231,218,0.3)',
+    },
+    insightCard: {
+        flexDirection: 'row',
+        backgroundColor: 'rgba(255, 255, 255, 0.05)',
         borderWidth: 1,
-        borderColor: dark.divider,
+        borderColor: 'rgba(255,255,255,0.05)',
+        borderRadius: radii.xl,
+        padding: spacing.lg,
+        alignItems: 'flex-start',
     },
-    appInfo: { flex: 1 },
-    appName: {
-        fontSize: typography.body.size,
-        fontWeight: '500',
-        color: dark.textPrimary,
-        marginBottom: spacing.xs,
+    insightIconBox: {
+        padding: spacing.sm,
+        backgroundColor: 'rgba(98,144,195,0.2)',
+        borderRadius: radii.md,
+        marginRight: spacing.md,
     },
-    packageName: {
-        fontSize: typography.caption.size,
-        color: dark.textSecondary,
+    insightTexts: {
+        flex: 1,
     },
+    insightCardTitle: {
+        color: s.mint,
+        fontSize: 16,
+        fontWeight: '600',
+        marginBottom: 4,
+    },
+    insightCardDesc: {
+        color: 'rgba(241, 255, 231, 0.6)',
+        fontSize: 14,
+        lineHeight: 20,
+    },
+    insightHighlight: {
+        color: s.seafoam,
+        fontWeight: 'bold',
+    },
+
+    // --- Blocks Section ---
+    blocksSection: {
+        marginBottom: spacing.xl,
+    },
+    blocksTitle: {
+        color: s.steel,
+        fontSize: 14,
+        fontWeight: 'bold',
+        letterSpacing: 2,
+        marginBottom: spacing.md,
+    },
+    blockRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        backgroundColor: 'rgba(255, 255, 255, 0.03)',
+        borderWidth: 1,
+        borderColor: 'rgba(194, 231, 218, 0.1)',
+        borderRadius: radii.lg,
+        padding: spacing.md,
+        marginBottom: spacing.sm,
+    },
+    blockRowLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    blockIconBox: {
+        width: 48,
+        height: 48,
+        borderRadius: radii.md,
+        backgroundColor: s.navy,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.05)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: spacing.md,
+    },
+    blockCategory: {
+        color: s.mint,
+        fontSize: 14,
+        fontWeight: 'bold',
+    },
+    blockApps: {
+        color: 'rgba(241, 255, 231, 0.4)',
+        fontSize: 10,
+        letterSpacing: 1,
+        marginTop: 2,
+        textTransform: 'uppercase',
+    },
+    blockTimeChip: {
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        backgroundColor: 'rgba(194,231,218,0.05)',
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: 'rgba(194,231,218,0.1)',
+    },
+    blockTimeText: {
+        color: s.seafoam,
+        fontSize: 10,
+        fontWeight: 'bold',
+    },
+
 });
 
 export default styles;

@@ -146,6 +146,13 @@ public class MyVpnService extends VpnService {
                         monitor.setDelayTime(seconds);
                     }
                     break;
+                case "SET_POPUP_DELAY":
+                    int minutes = intent.getIntExtra("minutes", 10);
+                    Log.d(TAG, "[CMD] SET_POPUP_DELAY minutes=" + minutes);
+                    if (monitor != null) {
+                        monitor.setPopupDelayMinutes(minutes);
+                    }
+                    break;
                 default:
                     Log.w(TAG, "[CMD] Unknown action: " + action);
             }

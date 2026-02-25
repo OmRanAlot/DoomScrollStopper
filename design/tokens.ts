@@ -48,11 +48,24 @@ export const colors = {
   gradientCalm: ['#DBEAFE', '#D1FAE5'],
   gradientCard: ['#818CF8', '#9333EA'],
   gradientBreathing: ['#67E8F9', '#5EEAD4'],
+
+  // --- Stitch UI Colors ---
+  stitch: {
+    navy: '#1A1B41',
+    mint: '#F1FFE7',
+    seafoam: '#C2E7DA',
+    steel: '#6290C3',
+    appBg: '#1A1B41',
+    appSurface: '#242554',
+    appBorder: '#6290C3',
+    appText: '#F1FFE7',
+    appAccent: '#C2E7DA',
+  }
 };
 
 export const typography = {
   fontFamilyIOSDisplay: 'SF Pro Display',
-  fontFamilyIOSText: 'SF Pro Text',
+  fontFamilyIOSText: 'SF Pro Text', // Or Space Grotesk if we load it later
   fontFamilyAndroid: 'Roboto',
 
   display: { size: 48, lineHeight: 56, weight: '300' },
@@ -92,6 +105,10 @@ export const shadows = {
   md: { offset: { width: 0, height: 4 }, radius: 6, color: 'rgba(0,0,0,0.07)', elevation: 3 },
   lg: { offset: { width: 0, height: 10 }, radius: 15, color: 'rgba(0,0,0,0.1)', elevation: 6 },
   xl: { offset: { width: 0, height: 20 }, radius: 25, color: 'rgba(0,0,0,0.15)', elevation: 12 },
+
+  // Custom shadows for new UI
+  glass: { shadowColor: '#C2E7DA', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.1, shadowRadius: 20, elevation: 8 },
+  glow: { shadowColor: '#C2E7DA', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.2, shadowRadius: 30, elevation: 10 },
 };
 
 export const animation = {
@@ -108,15 +125,14 @@ export const icons = {
   strokeWidth: 2,
 };
 
-// Convenience palette for dark-mode mapping (since PRD lists neutrals
-// primarily for light contexts, map dark-mode primary text/background)
+// Convenience palette for dark-mode mapping
 export const dark = {
-  background: colors.gray900,      // #1A1A18 - Warm neutral black
-  surface: colors.gray800,         // #252520 - Warm neutral surface
-  card: '#1F1F1C',                 // Warm dark card background
-  textPrimary: colors.gray50,
-  textSecondary: colors.gray300,
-  divider: colors.gray700,         // #3A3A35 - Warm neutral divider
+  background: colors.stitch.navy,
+  surface: colors.stitch.appSurface,
+  card: 'rgba(255, 255, 255, 0.03)',
+  textPrimary: colors.stitch.mint,
+  textSecondary: colors.stitch.seafoam,
+  divider: 'rgba(194, 231, 218, 0.1)',
   overlay: 'rgba(0,0,0,0.6)',
 };
 

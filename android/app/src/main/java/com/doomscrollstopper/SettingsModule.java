@@ -29,7 +29,7 @@ import java.util.Set;
 public class SettingsModule extends ReactContextBaseJavaModule {
     private final ReactApplicationContext reactContext;
     private static final String TAG = "SettingsModule";
-    
+
     public SettingsModule(ReactApplicationContext reactContext) {
         super(reactContext);
         this.reactContext = reactContext;
@@ -47,15 +47,35 @@ public class SettingsModule extends ReactContextBaseJavaModule {
         SharedPreferences prefs = reactContext.getSharedPreferences("doomscroll_prefs", Context.MODE_PRIVATE);
         Set<String> blockedApps = prefs.getStringSet("blocked_apps", new HashSet<>());
         Log.d(TAG, "[GET] returning " + blockedApps.size() + " apps: " + blockedApps.toString());
-        
-        // CRITICAL FIX: Convert Set to WritableArray so React Native receives a proper array
-        // Previous code used (Object[]) which spread values as separate callback arguments!
+
+        // CRITICAL FIX: Convert Set to WritableArray so React Native receives a proper
+        // array
+        // Previous code used (Object[]) which spread values as separate callback
+        // arguments!
         // This caused: callback('app1', 'app2') instead of: callback(['app1', 'app2'])
         WritableArray appsArray = Arguments.createArray();
         for (String app : blockedApps) {
             appsArray.pushString(app);
         }
         callback.invoke(appsArray);
+    }
+
+    @ReactMethod
+    public void saveMonitoringEnabled(boolean enabled) {
+        Log.d(TAG, "[SAVE] saveMonitoringEnabled called with enabled=" + enabled);
+        SharedPreferences prefs = reactContext.getSharedPreferences("doomscroll_prefs", Context.MODE_PRIVATE);
+        prefs.edit().putBoolean("monitoring_enabled", enabled).apply();
+        Log.d(TAG, "[SAVE] monitoring_enabled=" + enabled + " saved");
+    }
+
+    @ReactMethod
+    public void getMonitoringEnabled(com.facebook.react.bridge.Callback callback) {
+        Log.d(TAG, "[GET] getMonitoringEnabled called");
+        SharedPreferences prefs = reactContext.getSharedPreferences("doomscroll_prefs", Context.MODE_PRIVATE);
+        // Default to true so that after onboarding the blocker starts as ON
+        boolean enabled = prefs.getBoolean("monitoring_enabled", true);
+        Log.d(TAG, "[GET] monitoring_enabled=" + enabled);
+        callback.invoke(enabled);
     }
 
     @ReactMethod
@@ -70,7 +90,7 @@ public class SettingsModule extends ReactContextBaseJavaModule {
             Log.d(TAG, "[SAVE] app[" + i + "]: " + apps.getString(i));
         }
         Log.d(TAG, "[SAVE] saving set size=" + appSet.size() + " data=" + appSet.toString());
-        
+
         editor.putStringSet("blocked_apps", appSet);
         editor.apply();
         Log.d(TAG, "[SAVE] apply complete");

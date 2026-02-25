@@ -76,3 +76,5 @@ yarn-error.log
 
 #crash reports
 *.txt
+
+/stitch_screens/*

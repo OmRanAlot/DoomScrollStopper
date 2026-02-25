@@ -1,16 +1,36 @@
 // App.tsx
-import React from 'react';
-import {StyleSheet, Text } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { StyleSheet, Text, NativeModules } from 'react-native';
 import Home from './components/Home/home';
 import Customize from './components/Customize/customize';
 import Progress from './components/Progress/progress';
+import PermissionsScreen from './components/Permissions/PermissionsScreen';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+const { VPNModule } = NativeModules;
 const Tab = createBottomTabNavigator();
 
 const App = () => {
+  const [permissionsGranted, setPermissionsGranted] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    VPNModule.checkPermissions().then((perms: { usage: boolean; overlay: boolean }) => {
+      setPermissionsGranted(perms.usage && perms.overlay);
+    });
+  }, []);
+
+  if (permissionsGranted === null) return null;
+
+  if (!permissionsGranted) {
+    return (
+      <SafeAreaProvider>
+        <PermissionsScreen onComplete={() => setPermissionsGranted(true)} />
+      </SafeAreaProvider>
+    );
+  }
+
   return (
     <SafeAreaProvider>
       <NavigationContainer>

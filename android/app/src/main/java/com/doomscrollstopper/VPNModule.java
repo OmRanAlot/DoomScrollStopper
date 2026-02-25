@@ -612,6 +612,28 @@ public class VPNModule extends ReactContextBaseJavaModule {
         }
     }
 
+    @ReactMethod
+    public void setPopupDelayMinutes(int minutes, Promise promise) {
+        try {
+            Log.d(TAG, "[SET_POPUP_DELAY] Setting popup delay to " + minutes + " minutes");
+            
+            // Update VPNModule's appMonitor
+            appMonitor.setPopupDelayMinutes(minutes);
+            
+            // Also send to MyVpnService via Intent
+            Intent serviceIntent = new Intent(reactContext, MyVpnService.class);
+            serviceIntent.setAction("SET_POPUP_DELAY");
+            serviceIntent.putExtra("minutes", minutes);
+            reactContext.startService(serviceIntent);
+            
+            Log.d(TAG, "[SET_POPUP_DELAY] Popup delay updated successfully");
+            promise.resolve(true);
+        } catch (Exception e) {
+            Log.e(TAG, "[SET_POPUP_DELAY] Failed to set popup delay", e);
+            promise.reject("SET_POPUP_DELAY_ERROR", e.getMessage());
+        }
+    }
+
     private boolean hasUsageAccessPermission() {
         try {
             AppOpsManager appOps = (AppOpsManager) reactContext.getSystemService(Context.APP_OPS_SERVICE);
